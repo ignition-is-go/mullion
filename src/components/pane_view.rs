@@ -27,8 +27,10 @@ pub fn PaneView<D: PaneData + Send + Sync>(
                 pane_theme.background, pane_theme.color
             );
 
+            let ctx_focus = ctx.clone();
             view! {
-                <div style={pane_style}>
+                <div style={pane_style}
+                     on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id)); }>
                     <ActivityBar pane_id=id data=data_read ctx=ctx.clone() />
                     <div style="flex:1;overflow:hidden;position:relative">
                         <PaneContent pane_id=id activity=active_activity data=data_read ctx=ctx />

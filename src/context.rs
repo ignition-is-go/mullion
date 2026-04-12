@@ -21,6 +21,8 @@ pub struct MullionContext<D: PaneData> {
     event_tx: StoredValue<Box<dyn Fn(PaneEvent<D>) + Send + Sync>>,
     /// Counter for generating unique PaneIds.
     next_id: RwSignal<u64>,
+    /// The pane the mouse is currently over.
+    pub focused_pane: RwSignal<Option<PaneId>>,
     /// Resolved themes (captured at provider time so they work in reactive closures).
     pub mullion_theme: MullionTheme,
     pub activity_bar_theme: ActivityBarTheme,
@@ -52,6 +54,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             categories: StoredValue::new(categories),
             event_tx: StoredValue::new(Box::new(event_handler)),
             next_id: RwSignal::new(max_id + 1),
+            focused_pane: RwSignal::new(None),
             mullion_theme,
             activity_bar_theme,
             split_handle_theme,

@@ -22,90 +22,88 @@ impl Default for DemoData {
     }
 }
 
-fn categories() -> Vec<Category> {
+fn categories() -> Vec<Category<DemoData>> {
     vec![
         Category {
             id: CategoryId(0), name: "Explorer".into(), order: 0,
             icon: ActivityIcon::Svg(outlined::ICON_FOLDER.into()),
             color: "#75beff".into(),
+            activities: vec![
+                ActivityDef {
+                    id: ActivityId(1), name: "Files".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_DESCRIPTION.into()),
+                    filter: |d| d.show_files, render: |_pid, data| view! { <FilesActivity data=data /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(2), name: "Open Editors".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_ARTICLE.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Open Editors" /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(3), name: "Timeline".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_TIMELINE.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Timeline" /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(4), name: "Outline".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_LIST.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Outline" /> }.into_any(),
+                },
+            ],
         },
         Category {
             id: CategoryId(1), name: "Edit".into(), order: 1,
             icon: ActivityIcon::Svg(outlined::ICON_EDIT_NOTE.into()),
             color: "#e8ab53".into(),
+            activities: vec![
+                ActivityDef {
+                    id: ActivityId(5), name: "Search".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_SEARCH.into()),
+                    filter: |d| d.show_search, render: |_pid, data| view! { <SearchActivity data=data /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(6), name: "Replace".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_FIND_REPLACE.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Replace" /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(7), name: "Bookmarks".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_BOOKMARKS.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Bookmarks" /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(8), name: "Snippets".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_CODE.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Snippets" /> }.into_any(),
+                },
+            ],
         },
         Category {
             id: CategoryId(2), name: "Preferences".into(), order: 2,
             icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
             color: "#c586c0".into(),
-        },
-    ]
-}
-
-fn activities() -> Vec<ActivityDef<DemoData>> {
-    vec![
-        // Explorer category (4 activities)
-        ActivityDef {
-            id: ActivityId(1), name: "Files".into(), category: CategoryId(0),
-            icon: ActivityIcon::Svg(outlined::ICON_DESCRIPTION.into()),
-            filter: |d| d.show_files, render: |_pid, data| view! { <FilesActivity data=data /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(2), name: "Open Editors".into(), category: CategoryId(0),
-            icon: ActivityIcon::Svg(outlined::ICON_ARTICLE.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Open Editors" /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(3), name: "Timeline".into(), category: CategoryId(0),
-            icon: ActivityIcon::Svg(outlined::ICON_TIMELINE.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Timeline" /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(4), name: "Outline".into(), category: CategoryId(0),
-            icon: ActivityIcon::Svg(outlined::ICON_LIST.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Outline" /> }.into_any(),
-        },
-        // Edit category (4 activities)
-        ActivityDef {
-            id: ActivityId(5), name: "Search".into(), category: CategoryId(1),
-            icon: ActivityIcon::Svg(outlined::ICON_SEARCH.into()),
-            filter: |d| d.show_search, render: |_pid, data| view! { <SearchActivity data=data /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(6), name: "Replace".into(), category: CategoryId(1),
-            icon: ActivityIcon::Svg(outlined::ICON_FIND_REPLACE.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Replace" /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(7), name: "Bookmarks".into(), category: CategoryId(1),
-            icon: ActivityIcon::Svg(outlined::ICON_BOOKMARKS.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Bookmarks" /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(8), name: "Snippets".into(), category: CategoryId(1),
-            icon: ActivityIcon::Svg(outlined::ICON_CODE.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Snippets" /> }.into_any(),
-        },
-        // Preferences category (4 activities)
-        ActivityDef {
-            id: ActivityId(9), name: "Settings".into(), category: CategoryId(2),
-            icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
-            filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(10), name: "Themes".into(), category: CategoryId(2),
-            icon: ActivityIcon::Svg(outlined::ICON_PALETTE.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Themes" /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(11), name: "Keybindings".into(), category: CategoryId(2),
-            icon: ActivityIcon::Svg(outlined::ICON_KEYBOARD.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Keybindings" /> }.into_any(),
-        },
-        ActivityDef {
-            id: ActivityId(12), name: "Extensions".into(), category: CategoryId(2),
-            icon: ActivityIcon::Svg(outlined::ICON_EXTENSION.into()),
-            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Extensions" /> }.into_any(),
+            activities: vec![
+                ActivityDef {
+                    id: ActivityId(9), name: "Settings".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
+                    filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(10), name: "Themes".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_PALETTE.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Themes" /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(11), name: "Keybindings".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_KEYBOARD.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Keybindings" /> }.into_any(),
+                },
+                ActivityDef {
+                    id: ActivityId(12), name: "Extensions".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_EXTENSION.into()),
+                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Extensions" /> }.into_any(),
+                },
+            ],
         },
     ]
 }
@@ -211,28 +209,28 @@ fn App() -> impl IntoView {
         width: "28px".into(),
         expanded_width: "150px".into(),
         icon_size: "14px".into(),
-        background: "#252526".into(),
-        border: "1px solid #333".into(),
+        background: "#111111".into(),
+        border: "1px solid #222".into(),
         border_radius: "0".into(),
         expanded_padding: "10px".into(),
         font_size: "11px".into(),
-        icon_color: "#ccc".into(),
-        icon_stroke_color: "#ccc".into(),
-        icon_opacity: "0.5".into(),
+        icon_color: "#eee".into(),
+        icon_stroke_color: "#eee".into(),
+        icon_opacity: "1".into(),
         icon_active_opacity: "1".into(),
         category_border_width: "2px".into(),
     });
     provide_context(SplitHandleTheme {
-        thickness: "4px".into(),
-        color: "#1e1e1e".into(),
-        hover_color: "#007acc".into(),
+        thickness: "2px".into(),
+        color: "#1a1a1a".into(),
+        hover_color: "#333".into(),
     });
     provide_context(PaneTheme {
-        background: "#1e1e1e".into(),
-        color: "#ccc".into(),
+        background: "#111111".into(),
+        color: "#eee".into(),
     });
     provide_context(MullionTheme {
-        background: "#1e1e1e".into(),
+        background: "#0e0e0e".into(),
     });
 
     let on_event = move |event: PaneEvent<DemoData>| {
@@ -253,7 +251,6 @@ fn App() -> impl IntoView {
     view! {
         <MullionProvider
             initial_tree=default_workspace()
-            activities=activities()
             categories=categories()
             on_event=on_event
         >
@@ -275,16 +272,17 @@ fn DemoLayout(workspace_mgr: WorkspaceManager<DemoData>) -> impl IntoView {
             <div style="flex:1;min-height:0;overflow:hidden;">
                 <MullionPaneTree ctx=ctx />
             </div>
-            <div style="display:flex;gap:1px;background:#181818;padding:2px 4px;">
+            <div style="display:flex;gap:1px;background:#0a0a0a;padding:2px 4px;border-top:1px solid #1a1a1a;">
                 {move || {
                     let ws_list = mgr.list();
                     let current = mgr.active_id();
                     ws_list.into_iter().enumerate().map(|(i, ws)| {
                         let is_active = ws.id == current;
-                        let bg = if is_active { "#007acc" } else { "#333" };
+                        let bg = if is_active { "#222" } else { "transparent" };
+                        let color = if is_active { "#aaa" } else { "#444" };
                         let style = format!(
-                            "background:{};color:#ccc;border:none;padding:2px 8px;font-size:11px;cursor:pointer;border-radius:2px;font-family:monospace",
-                            bg
+                            "background:{};color:{};border:none;padding:2px 8px;font-size:11px;cursor:pointer;border-radius:2px;font-family:monospace",
+                            bg, color
                         );
                         let mgr = mgr.clone();
                         let ctx = ctx_for_footer.clone();

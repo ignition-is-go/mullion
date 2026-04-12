@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::activity::{ActivityDef, Category};
+use crate::activity::Category;
 use crate::context::MullionContext;
 use crate::events::PaneEvent;
 use crate::theme::{ActivityBarTheme, MullionTheme, PaneTheme, SplitHandleTheme};
@@ -19,10 +19,8 @@ use super::pane_view::PaneView;
 pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// The initial pane tree layout.
     initial_tree: PaneNode<D>,
-    /// All activity definitions.
-    activities: Vec<ActivityDef<D>>,
-    /// Category definitions (ordering matters).
-    categories: Vec<Category>,
+    /// Categories with their activities.
+    categories: Vec<Category<D>>,
     /// Called for every pane event (split, close, move, resize, etc.).
     on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
     /// Optional upstream signal to update the tree live from server queries.
@@ -30,7 +28,6 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     upstream: Option<ReadSignal<Option<PaneNode<D>>>>,
     children: Children,
 ) -> impl IntoView {
-    // Resolve themes: use consumer-provided context or defaults
     let mullion_theme = use_context::<MullionTheme>().unwrap_or_default();
     let activity_bar_theme = use_context::<ActivityBarTheme>().unwrap_or_default();
     let split_handle_theme = use_context::<SplitHandleTheme>().unwrap_or_default();
@@ -38,7 +35,6 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
 
     let ctx = MullionContext::new(
         initial_tree,
-        activities,
         categories,
         on_event,
         mullion_theme,
@@ -62,18 +58,12 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
 }
 
 /// All-in-one component: provides context and renders the pane tree.
-///
-/// Use this for the simple case where you just want the pane layout rendered.
-/// For more control (e.g., adding a workspace switcher), use `MullionProvider`
-/// with `MullionPaneTree` instead.
 #[component]
 pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// The initial pane tree layout.
     initial_tree: PaneNode<D>,
-    /// All activity definitions.
-    activities: Vec<ActivityDef<D>>,
-    /// Category definitions (ordering matters).
-    categories: Vec<Category>,
+    /// Categories with their activities.
+    categories: Vec<Category<D>>,
     /// Called for every pane event.
     on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
     /// Optional upstream signal.
@@ -87,7 +77,6 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
 
     let ctx = MullionContext::new(
         initial_tree,
-        activities,
         categories,
         on_event,
         mullion_theme.clone(),
@@ -121,9 +110,6 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
 }
 
 /// Renders just the pane tree from a `MullionContext`.
-///
-/// Use inside a `MullionProvider` when you need to compose the tree
-/// with other elements (toolbar, workspace switcher, etc.).
 #[component]
 pub fn MullionPaneTree<D: PaneData + Send + Sync>(
     ctx: MullionContext<D>,

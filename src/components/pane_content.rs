@@ -16,12 +16,12 @@ pub fn PaneContent<D: PaneData + Send + Sync>(
         let d = data.get();
         if let Some(act_id) = activity {
             let available = ctx_for_memo.activities_for_pane(&d);
-            if available.iter().any(|a| a.id == act_id) {
+            if available.iter().any(|a| a.def.id == act_id) {
                 return Some(act_id);
             }
         }
         let available = ctx_for_memo.activities_for_pane(&d);
-        available.first().map(|a| a.id)
+        available.first().map(|a| a.def.id)
     });
 
     view! {
@@ -30,7 +30,7 @@ pub fn PaneContent<D: PaneData + Send + Sync>(
             match act_id {
                 Some(id) => {
                     let render_fn = ctx.activities.with_value(|acts| {
-                        acts.iter().find(|a| a.id == id).map(|a| a.render)
+                        acts.iter().find(|a| a.def.id == id).map(|a| a.def.render)
                     });
                     match render_fn {
                         Some(render) => render(pane_id, data),

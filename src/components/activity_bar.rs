@@ -28,7 +28,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
             let in_cat: Vec<_> = acts
                 .iter()
                 .filter(|a| a.category == cat.id)
-                .map(|a| (a.id, a.name.clone(), a.icon.clone()))
+                .map(|a| (a.def.id, a.def.name.clone(), a.def.icon.clone()))
                 .collect();
             if !in_cat.is_empty() {
                 groups.push((cat.id, cat.name.clone(), cat.icon.clone(), cat.color.clone(), in_cat));
@@ -51,10 +51,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     Effect::new(move |_| {
         let active = active_activity.get();
         if let Some(act_id) = active {
-            let cat_id = ctx_for_expand.activities.with_value(|acts| {
-                acts.iter().find(|a| a.id == act_id).map(|a| a.category)
-            });
-            if let Some(cat_id) = cat_id {
+            if let Some(cat_id) = ctx_for_expand.activity_category(act_id) {
                 set_expanded_cat.set(Some(cat_id));
             }
         }
@@ -182,10 +179,12 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                                 {acts.into_iter().map(|(act_id, name, icon)| {
                                                     let is_active = current_active == Some(act_id);
                                                     let opacity = if is_active { icon_active_opacity.clone() } else { icon_opacity.clone() };
+                                                    let act_color = if is_active { cat_color_for_border.clone() } else { icon_color.clone() };
+                                                    let act_stroke = if is_active { cat_color_for_border.clone() } else { icon_stroke_color.clone() };
                                                     let ctx = ctx.clone();
                                                     let act_row_style = format!(
                                                         "display:flex;align-items:center;height:{};cursor:pointer;opacity:{};color:{};white-space:nowrap;border:none;background:none;width:100%;text-align:left;font-size:{};padding:0",
-                                                        btn_height, opacity, icon_color, font_size
+                                                        btn_height, opacity, act_color, font_size
                                                     );
                                                     let label = name.clone();
                                                     view! {
@@ -193,7 +192,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                                             ctx.set_active_activity(pane_id, Some(act_id));
                                                         }>
                                                             <span style={icon_slot_style.clone()}>
-                                                                {render_icon(&icon, &icon_size, &icon_color, &icon_stroke_color)}
+                                                                {render_icon(&icon, &icon_size, &act_color, &act_stroke)}
                                                             </span>
                                                             <span class="mb-label" style="overflow:hidden;text-overflow:ellipsis">{label.clone()}</span>
                                                         </button>

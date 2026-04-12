@@ -1,9 +1,9 @@
 use leptos::prelude::*;
 
-use crate::activity::{ActivityDef, Category};
+use crate::activity::{ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
 use crate::theme::{ActivityBarTheme, MullionTheme, PaneTheme, SplitHandleTheme};
-use crate::tree::{ActivityId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
+use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
 
 /// The reactive store for the mullion pane system.
 ///
@@ -13,10 +13,10 @@ use crate::tree::{ActivityId, DropEdge, PaneData, PaneId, PaneNode, SplitDirecti
 pub struct MullionContext<D: PaneData> {
     /// The reactive pane tree. Can be read to render, updated for mutations.
     pub tree: RwSignal<PaneNode<D>>,
-    /// All registered activity definitions.
-    pub activities: StoredValue<Vec<ActivityDef<D>>>,
-    /// Ordered categories.
-    pub categories: StoredValue<Vec<Category>>,
+    /// All registered activities (flattened, with category ids).
+    pub(crate) activities: StoredValue<Vec<ActivityWithCategory<D>>>,
+    /// Category metadata (without activities), sorted by order.
+    pub(crate) categories: StoredValue<Vec<CategoryMeta>>,
     /// Event sink — write end. Every mutation pushes an event here.
     event_tx: StoredValue<Box<dyn Fn(PaneEvent<D>) + Send + Sync>>,
     /// Counter for generating unique PaneIds.
@@ -33,8 +33,7 @@ pub struct MullionContext<D: PaneData> {
 impl<D: PaneData + Send + Sync> MullionContext<D> {
     pub fn new(
         initial_tree: PaneNode<D>,
-        activities: Vec<ActivityDef<D>>,
-        categories: Vec<Category>,
+        categories: Vec<Category<D>>,
         event_handler: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
         mullion_theme: MullionTheme,
         activity_bar_theme: ActivityBarTheme,
@@ -48,10 +47,32 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             .max()
             .unwrap_or(0);
 
+        // Flatten categories into metadata + activities with category ids
+        let mut cat_metas = Vec::new();
+        let mut all_activities = Vec::new();
+
+        for cat in categories {
+            cat_metas.push(CategoryMeta {
+                id: cat.id,
+                name: cat.name,
+                order: cat.order,
+                icon: cat.icon,
+                color: cat.color,
+            });
+            for act in cat.activities {
+                all_activities.push(ActivityWithCategory {
+                    def: act,
+                    category: cat_metas.last().unwrap().id,
+                });
+            }
+        }
+
+        cat_metas.sort_by_key(|c| c.order);
+
         MullionContext {
             tree: RwSignal::new(initial_tree),
-            activities: StoredValue::new(activities),
-            categories: StoredValue::new(categories),
+            activities: StoredValue::new(all_activities),
+            categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
             next_id: RwSignal::new(max_id + 1),
             focused_pane: RwSignal::new(None),
@@ -163,21 +184,27 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     }
 
     /// Get activities available in a pane, filtered by its data.
-    pub fn activities_for_pane(&self, data: &D) -> Vec<ActivityDef<D>> {
+    /// Returns (activity_def, category_id) pairs.
+    pub fn activities_for_pane(&self, data: &D) -> Vec<ActivityWithCategory<D>> {
         self.activities.with_value(|acts| {
             acts.iter()
-                .filter(|a| (a.filter)(data))
+                .filter(|a| (a.def.filter)(data))
                 .cloned()
                 .collect()
         })
     }
 
     /// Get categories sorted by order.
-    pub fn sorted_categories(&self) -> Vec<Category> {
-        self.categories.with_value(|cats| {
-            let mut sorted = cats.clone();
-            sorted.sort_by_key(|c| c.order);
-            sorted
+    pub fn sorted_categories(&self) -> Vec<CategoryMeta> {
+        self.categories.with_value(|cats| cats.clone())
+    }
+
+    /// Look up an activity's category id.
+    pub fn activity_category(&self, activity_id: ActivityId) -> Option<CategoryId> {
+        self.activities.with_value(|acts| {
+            acts.iter()
+                .find(|a| a.def.id == activity_id)
+                .map(|a| a.category)
         })
     }
 

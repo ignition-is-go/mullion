@@ -1,0 +1,7 @@
+[package]
+name = "mullion"
+version = "0.1.0"
+edition = "2021"
+description = "A Leptos library for splittable panes with activity bars"
+
+[dependencies]

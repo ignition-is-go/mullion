@@ -1,0 +1,142 @@
+use leptos::prelude::*;
+
+use crate::activity::{ActivityDef, Category};
+use crate::context::MullionContext;
+use crate::events::PaneEvent;
+use crate::theme::{ActivityBarTheme, MullionTheme, PaneTheme, SplitHandleTheme};
+use crate::tree::{PaneData, PaneNode};
+
+use super::pane_view::PaneView;
+
+/// Context-only provider for the mullion pane system.
+///
+/// Sets up `MullionContext` and default themes, then renders its children.
+/// Use this when you want full control over layout (e.g., placing a
+/// `WorkspaceSwitcher` alongside the pane tree).
+///
+/// Children can access `MullionContext<D>` via `use_context`.
+#[component]
+pub fn MullionProvider<D: PaneData + Send + Sync>(
+    /// The initial pane tree layout.
+    initial_tree: PaneNode<D>,
+    /// All activity definitions.
+    activities: Vec<ActivityDef<D>>,
+    /// Category definitions (ordering matters).
+    categories: Vec<Category>,
+    /// Called for every pane event (split, close, move, resize, etc.).
+    on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
+    /// Optional upstream signal to update the tree live from server queries.
+    #[prop(optional)]
+    upstream: Option<ReadSignal<Option<PaneNode<D>>>>,
+    children: Children,
+) -> impl IntoView {
+    // Resolve themes: use consumer-provided context or defaults
+    let mullion_theme = use_context::<MullionTheme>().unwrap_or_default();
+    let activity_bar_theme = use_context::<ActivityBarTheme>().unwrap_or_default();
+    let split_handle_theme = use_context::<SplitHandleTheme>().unwrap_or_default();
+    let pane_theme = use_context::<PaneTheme>().unwrap_or_default();
+
+    let ctx = MullionContext::new(
+        initial_tree,
+        activities,
+        categories,
+        on_event,
+        mullion_theme,
+        activity_bar_theme,
+        split_handle_theme,
+        pane_theme,
+    );
+
+    if let Some(upstream_sig) = upstream {
+        let ctx_clone = ctx.clone();
+        Effect::new(move |_| {
+            if let Some(new_tree) = upstream_sig.get() {
+                ctx_clone.set_tree(new_tree);
+            }
+        });
+    }
+
+    provide_context(ctx);
+
+    children()
+}
+
+/// All-in-one component: provides context and renders the pane tree.
+///
+/// Use this for the simple case where you just want the pane layout rendered.
+/// For more control (e.g., adding a workspace switcher), use `MullionProvider`
+/// with `MullionPaneTree` instead.
+#[component]
+pub fn MullionRoot<D: PaneData + Send + Sync>(
+    /// The initial pane tree layout.
+    initial_tree: PaneNode<D>,
+    /// All activity definitions.
+    activities: Vec<ActivityDef<D>>,
+    /// Category definitions (ordering matters).
+    categories: Vec<Category>,
+    /// Called for every pane event.
+    on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
+    /// Optional upstream signal.
+    #[prop(optional)]
+    upstream: Option<ReadSignal<Option<PaneNode<D>>>>,
+) -> impl IntoView {
+    let mullion_theme = use_context::<MullionTheme>().unwrap_or_default();
+    let activity_bar_theme = use_context::<ActivityBarTheme>().unwrap_or_default();
+    let split_handle_theme = use_context::<SplitHandleTheme>().unwrap_or_default();
+    let pane_theme = use_context::<PaneTheme>().unwrap_or_default();
+
+    let ctx = MullionContext::new(
+        initial_tree,
+        activities,
+        categories,
+        on_event,
+        mullion_theme.clone(),
+        activity_bar_theme,
+        split_handle_theme,
+        pane_theme,
+    );
+
+    if let Some(upstream_sig) = upstream {
+        let ctx_clone = ctx.clone();
+        Effect::new(move |_| {
+            if let Some(new_tree) = upstream_sig.get() {
+                ctx_clone.set_tree(new_tree);
+            }
+        });
+    }
+
+    provide_context(ctx.clone());
+
+    let tree = ctx.tree;
+    let root_style = format!("width:100%;height:100%;background:{}", mullion_theme.background);
+
+    view! {
+        <div style={root_style}>
+            {move || {
+                let current_tree = tree.get();
+                view! { <PaneView node=current_tree ctx=ctx.clone() /> }
+            }}
+        </div>
+    }
+}
+
+/// Renders just the pane tree from a `MullionContext`.
+///
+/// Use inside a `MullionProvider` when you need to compose the tree
+/// with other elements (toolbar, workspace switcher, etc.).
+#[component]
+pub fn MullionPaneTree<D: PaneData + Send + Sync>(
+    ctx: MullionContext<D>,
+) -> impl IntoView {
+    let root_style = format!("width:100%;height:100%;background:{}", ctx.mullion_theme.background);
+    let tree = ctx.tree;
+
+    view! {
+        <div style={root_style}>
+            {move || {
+                let current_tree = tree.get();
+                view! { <PaneView node=current_tree ctx=ctx.clone() /> }
+            }}
+        </div>
+    }
+}

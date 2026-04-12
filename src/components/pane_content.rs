@@ -1,0 +1,44 @@
+use leptos::prelude::*;
+
+use crate::context::MullionContext;
+use crate::tree::{ActivityId, PaneData, PaneId};
+
+/// Renders the content area for a pane by delegating to the active activity's render function.
+#[component]
+pub fn PaneContent<D: PaneData + Send + Sync>(
+    pane_id: PaneId,
+    activity: Option<ActivityId>,
+    data: ReadSignal<D>,
+    ctx: MullionContext<D>,
+) -> impl IntoView {
+    let ctx_for_memo = ctx.clone();
+    let resolved_activity = Memo::new(move |_| {
+        let d = data.get();
+        if let Some(act_id) = activity {
+            let available = ctx_for_memo.activities_for_pane(&d);
+            if available.iter().any(|a| a.id == act_id) {
+                return Some(act_id);
+            }
+        }
+        let available = ctx_for_memo.activities_for_pane(&d);
+        available.first().map(|a| a.id)
+    });
+
+    view! {
+        {move || {
+            let act_id = resolved_activity.get();
+            match act_id {
+                Some(id) => {
+                    let render_fn = ctx.activities.with_value(|acts| {
+                        acts.iter().find(|a| a.id == id).map(|a| a.render)
+                    });
+                    match render_fn {
+                        Some(render) => render(pane_id, data),
+                        None => view! { <div>"Activity not found"</div> }.into_any(),
+                    }
+                }
+                None => view! { <div></div> }.into_any(),
+            }
+        }}
+    }
+}

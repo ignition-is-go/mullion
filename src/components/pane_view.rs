@@ -4,6 +4,7 @@ use crate::context::MullionContext;
 use crate::tree::{PaneData, PaneNode, SplitDirection};
 
 use super::activity_bar::ActivityBar;
+use super::drop_overlay::DropOverlay;
 use super::pane_content::PaneContent;
 use super::split_handle::SplitHandle;
 
@@ -28,8 +29,20 @@ pub fn PaneView<D: PaneData + Send + Sync>(
             );
 
             let ctx_focus = ctx.clone();
+            let ctx_ref = ctx.clone();
+            let pane_ref: NodeRef<leptos::html::Div> = NodeRef::new();
+
+            // Register the DOM element once mounted
+            Effect::new(move |_| {
+                if let Some(el) = pane_ref.get() {
+                    let html_el: web_sys::HtmlElement = el.into();
+                    ctx_ref.register_pane_element(id, html_el);
+                }
+            });
+
             view! {
                 <div style={pane_style}
+                     node_ref=pane_ref
                      on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id)); }>
                     {
                         let app_icon = ctx.app_icon.clone();
@@ -40,7 +53,8 @@ pub fn PaneView<D: PaneData + Send + Sync>(
                         }
                     }
                     <div style="flex:1;overflow:hidden;position:relative">
-                        <PaneContent pane_id=id activity=active_activity data=data_read ctx=ctx />
+                        <PaneContent pane_id=id activity=active_activity data=data_read ctx=ctx.clone() />
+                        <DropOverlay pane_id=id ctx=ctx />
                     </div>
                 </div>
             }

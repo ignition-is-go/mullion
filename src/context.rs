@@ -1,8 +1,12 @@
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 use leptos::prelude::*;
+use send_wrapper::SendWrapper;
 
 use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarTheme, MullionTheme, PaneTheme, SplitHandleTheme};
+use crate::theme::{ActivityBarTheme, DropOverlayTheme, MullionTheme, PaneTheme, SplitHandleTheme};
 use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
 
 /// The reactive store for the mullion pane system.
@@ -23,13 +27,18 @@ pub struct MullionContext<D: PaneData> {
     next_id: RwSignal<u64>,
     /// The pane the mouse is currently over.
     pub focused_pane: RwSignal<Option<PaneId>>,
+    /// Pane currently being dragged (for move operations).
+    pub dragging_pane: RwSignal<Option<PaneId>>,
     /// Resolved themes (captured at provider time so they work in reactive closures).
     pub mullion_theme: MullionTheme,
     pub activity_bar_theme: ActivityBarTheme,
     pub split_handle_theme: SplitHandleTheme,
     pub pane_theme: PaneTheme,
+    pub drop_overlay_theme: DropOverlayTheme,
     /// Optional app icon displayed at the top of every activity bar.
     pub app_icon: Option<ActivityIcon>,
+    /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
+    pane_elements: Arc<Mutex<HashMap<PaneId, SendWrapper<web_sys::HtmlElement>>>>,
 }
 
 impl<D: PaneData + Send + Sync> MullionContext<D> {
@@ -41,6 +50,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         activity_bar_theme: ActivityBarTheme,
         split_handle_theme: SplitHandleTheme,
         pane_theme: PaneTheme,
+        drop_overlay_theme: DropOverlayTheme,
         app_icon: Option<ActivityIcon>,
     ) -> Self {
         let max_id = initial_tree
@@ -79,11 +89,14 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             event_tx: StoredValue::new(Box::new(event_handler)),
             next_id: RwSignal::new(max_id + 1),
             focused_pane: RwSignal::new(None),
+            dragging_pane: RwSignal::new(None),
             mullion_theme,
             activity_bar_theme,
             split_handle_theme,
             pane_theme,
+            drop_overlay_theme,
             app_icon,
+            pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -222,5 +235,21 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             .unwrap_or(0);
         self.next_id.set(max_id + 1);
         self.tree.set(new_tree);
+    }
+
+    /// Register a pane's DOM element (called internally by PaneView on mount).
+    pub(crate) fn register_pane_element(&self, id: PaneId, el: web_sys::HtmlElement) {
+        self.pane_elements.lock().unwrap().insert(id, SendWrapper::new(el));
+    }
+
+    /// Get the DOM element for a pane. Use this to position overlays,
+    /// tooltips, or anything relative to a specific pane.
+    pub fn pane_element(&self, id: PaneId) -> Option<web_sys::HtmlElement> {
+        self.pane_elements.lock().unwrap().get(&id).map(|w| w.clone().take())
+    }
+
+    /// Get the bounding rect for a pane.
+    pub fn pane_rect(&self, id: PaneId) -> Option<web_sys::DomRect> {
+        self.pane_elements.lock().unwrap().get(&id).map(|el| el.get_bounding_client_rect())
     }
 }

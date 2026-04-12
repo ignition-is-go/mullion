@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use crate::activity::Category;
 use crate::context::MullionContext;
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarTheme, MullionTheme, PaneTheme, SplitHandleTheme};
+use crate::theme::{ActivityBarTheme, DropOverlayTheme, MullionTheme, PaneTheme, SplitHandleTheme};
 use crate::tree::{PaneData, PaneNode};
 
 use super::pane_view::PaneView;
@@ -35,6 +35,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let activity_bar_theme = use_context::<ActivityBarTheme>().unwrap_or_default();
     let split_handle_theme = use_context::<SplitHandleTheme>().unwrap_or_default();
     let pane_theme = use_context::<PaneTheme>().unwrap_or_default();
+    let drop_overlay_theme = use_context::<DropOverlayTheme>().unwrap_or_default();
 
     let ctx = MullionContext::new(
         initial_tree,
@@ -44,6 +45,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         activity_bar_theme,
         split_handle_theme,
         pane_theme,
+        drop_overlay_theme,
         app_icon,
     );
 
@@ -81,6 +83,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let activity_bar_theme = use_context::<ActivityBarTheme>().unwrap_or_default();
     let split_handle_theme = use_context::<SplitHandleTheme>().unwrap_or_default();
     let pane_theme = use_context::<PaneTheme>().unwrap_or_default();
+    let drop_overlay_theme = use_context::<DropOverlayTheme>().unwrap_or_default();
 
     let ctx = MullionContext::new(
         initial_tree,
@@ -90,6 +93,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         activity_bar_theme,
         split_handle_theme,
         pane_theme,
+        drop_overlay_theme,
         app_icon,
     );
 

@@ -11,6 +11,6 @@ pub use components::mullion_root::{MullionPaneTree, MullionProvider, MullionRoot
 pub use components::workspace_switcher::{WorkspaceSwitcher, WorkspaceSwitcherTheme};
 pub use context::MullionContext;
 pub use events::PaneEvent;
-pub use theme::{ActivityBarTheme, MullionTheme, PaneTheme, SplitHandleTheme};
+pub use theme::{ActivityBarTheme, DropOverlayTheme, MullionTheme, PaneTheme, SplitHandleTheme};
 pub use tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
 pub use workspace::{Workspace, WorkspaceId, WorkspaceManager};

@@ -88,6 +88,21 @@ impl Default for PaneTheme {
     }
 }
 
+/// Theme for the drag-and-drop overlay.
+#[derive(Clone, Debug)]
+pub struct DropOverlayTheme {
+    /// Background color of the drop zone indicator.
+    pub indicator_color: String,
+}
+
+impl Default for DropOverlayTheme {
+    fn default() -> Self {
+        DropOverlayTheme {
+            indicator_color: "rgba(0,122,204,0.3)".into(),
+        }
+    }
+}
+
 /// Top-level theme for the mullion root container.
 #[derive(Clone, Debug)]
 pub struct MullionTheme {

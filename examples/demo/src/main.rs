@@ -233,6 +233,10 @@ fn App() -> impl IntoView {
         background: "#0e0e0e".into(),
     });
 
+    provide_context(DropOverlayTheme {
+        indicator_color: "rgba(255,255,255,0.06)".into(),
+    });
+
     let on_event = move |event: PaneEvent<DemoData>| {
         let desc = match &event {
             PaneEvent::Split { target, new_id, direction, .. } => {

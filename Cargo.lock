@@ -862,6 +862,7 @@ name = "mullion"
 version = "0.1.0"
 dependencies = [
  "leptos",
+ "send_wrapper",
  "serde",
  "serde_json",
  "wasm-bindgen",

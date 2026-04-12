@@ -140,11 +140,25 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                         let slot = icon_slot_style.clone();
                         let h = btn_height.clone();
                         let app_style = format!(
-                            "display:flex;align-items:center;height:{};padding:0;border:none;background:none;width:100%",
+                            "display:flex;align-items:center;height:{};padding:0;border:none;background:none;width:100%;cursor:grab",
                             h
                         );
+                        let ctx_drag = ctx.clone();
+                        let ctx_dragend = ctx.clone();
                         view! {
-                            <div style={app_style}>
+                            <div style={app_style}
+                                 draggable="true"
+                                 on:dragstart=move |ev| {
+                                     ctx_drag.dragging_pane.set(Some(pane_id));
+                                     // Set drag data for HTML5 drag API
+                                     if let Some(dt) = ev.data_transfer() {
+                                         let _ = dt.set_data("text/plain", &format!("{}", pane_id.0));
+                                         dt.set_effect_allowed("move");
+                                     }
+                                 }
+                                 on:dragend=move |_| {
+                                     ctx_dragend.dragging_pane.set(None);
+                                 }>
                                 <span style={slot}>
                                     {render_icon(&icon, &icon_size, &icon_color, &icon_stroke_color)}
                                 </span>

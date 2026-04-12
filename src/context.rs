@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::activity::{ActivityWithCategory, Category, CategoryMeta};
+use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
 use crate::theme::{ActivityBarTheme, MullionTheme, PaneTheme, SplitHandleTheme};
 use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
@@ -28,6 +28,8 @@ pub struct MullionContext<D: PaneData> {
     pub activity_bar_theme: ActivityBarTheme,
     pub split_handle_theme: SplitHandleTheme,
     pub pane_theme: PaneTheme,
+    /// Optional app icon displayed at the top of every activity bar.
+    pub app_icon: Option<ActivityIcon>,
 }
 
 impl<D: PaneData + Send + Sync> MullionContext<D> {
@@ -39,6 +41,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         activity_bar_theme: ActivityBarTheme,
         split_handle_theme: SplitHandleTheme,
         pane_theme: PaneTheme,
+        app_icon: Option<ActivityIcon>,
     ) -> Self {
         let max_id = initial_tree
             .leaf_ids()
@@ -80,6 +83,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             activity_bar_theme,
             split_handle_theme,
             pane_theme,
+            app_icon,
         }
     }
 

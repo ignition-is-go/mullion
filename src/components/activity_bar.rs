@@ -13,6 +13,8 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     pane_id: PaneId,
     data: ReadSignal<D>,
     ctx: MullionContext<D>,
+    #[prop(optional)]
+    app_icon: Option<ActivityIcon>,
 ) -> impl IntoView {
     let theme = ctx.activity_bar_theme.clone();
     let (expanded_cat, set_expanded_cat) = signal(Option::<CategoryId>::None);
@@ -132,8 +134,24 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         <div class={scope_id} style={spacer_style}>
             <style>{css}</style>
             <div class="mb-panel" style={panel_style}>
-                // Categories + activities
+                // App icon + categories + activities
                 <div>
+                    {app_icon.map(|icon| {
+                        let slot = icon_slot_style.clone();
+                        let h = btn_height.clone();
+                        let app_style = format!(
+                            "display:flex;align-items:center;height:{};padding:0;border:none;background:none;width:100%",
+                            h
+                        );
+                        view! {
+                            <div style={app_style}>
+                                <span style={slot}>
+                                    {render_icon(&icon, &icon_size, &icon_color, &icon_stroke_color)}
+                                </span>
+                                <span class="mb-label" style="overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:12px"></span>
+                            </div>
+                        }
+                    })}
                     {move || {
                         let groups = grouped.get();
                         let current_active = active_activity.get();

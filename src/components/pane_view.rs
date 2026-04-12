@@ -31,7 +31,14 @@ pub fn PaneView<D: PaneData + Send + Sync>(
             view! {
                 <div style={pane_style}
                      on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id)); }>
-                    <ActivityBar pane_id=id data=data_read ctx=ctx.clone() />
+                    {
+                        let app_icon = ctx.app_icon.clone();
+                        if let Some(icon) = app_icon {
+                            view! { <ActivityBar pane_id=id data=data_read ctx=ctx.clone() app_icon=icon /> }.into_any()
+                        } else {
+                            view! { <ActivityBar pane_id=id data=data_read ctx=ctx.clone() /> }.into_any()
+                        }
+                    }
                     <div style="flex:1;overflow:hidden;position:relative">
                         <PaneContent pane_id=id activity=active_activity data=data_read ctx=ctx />
                     </div>

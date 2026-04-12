@@ -253,6 +253,7 @@ fn App() -> impl IntoView {
             initial_tree=default_workspace()
             categories=categories()
             on_event=on_event
+            app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
         >
             <DemoLayout workspace_mgr=workspace_mgr />
         </MullionProvider>

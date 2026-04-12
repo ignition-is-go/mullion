@@ -26,6 +26,9 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// Optional upstream signal to update the tree live from server queries.
     #[prop(optional)]
     upstream: Option<ReadSignal<Option<PaneNode<D>>>>,
+    /// Optional app icon shown at the top of every activity bar.
+    #[prop(optional)]
+    app_icon: Option<crate::activity::ActivityIcon>,
     children: Children,
 ) -> impl IntoView {
     let mullion_theme = use_context::<MullionTheme>().unwrap_or_default();
@@ -41,6 +44,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         activity_bar_theme,
         split_handle_theme,
         pane_theme,
+        app_icon,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -69,6 +73,9 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// Optional upstream signal.
     #[prop(optional)]
     upstream: Option<ReadSignal<Option<PaneNode<D>>>>,
+    /// Optional app icon shown at the top of every activity bar.
+    #[prop(optional)]
+    app_icon: Option<crate::activity::ActivityIcon>,
 ) -> impl IntoView {
     let mullion_theme = use_context::<MullionTheme>().unwrap_or_default();
     let activity_bar_theme = use_context::<ActivityBarTheme>().unwrap_or_default();
@@ -83,6 +90,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         activity_bar_theme,
         split_handle_theme,
         pane_theme,
+        app_icon,
     );
 
     if let Some(upstream_sig) = upstream {

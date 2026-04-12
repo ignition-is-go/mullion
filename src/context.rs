@@ -23,8 +23,6 @@ pub struct MullionContext<D: PaneData> {
     pub(crate) categories: StoredValue<Vec<CategoryMeta>>,
     /// Event sink — write end. Every mutation pushes an event here.
     event_tx: StoredValue<Box<dyn Fn(PaneEvent<D>) + Send + Sync>>,
-    /// Counter for generating unique PaneIds.
-    next_id: RwSignal<u64>,
     /// The pane the mouse is currently over.
     pub focused_pane: RwSignal<Option<PaneId>>,
     /// Pane currently being dragged (for move operations).
@@ -53,13 +51,6 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         drop_overlay_theme: DropOverlayTheme,
         app_icon: Option<ActivityIcon>,
     ) -> Self {
-        let max_id = initial_tree
-            .leaf_ids()
-            .into_iter()
-            .map(|id| id.0)
-            .max()
-            .unwrap_or(0);
-
         // Flatten categories into metadata + activities with category ids
         let mut cat_metas = Vec::new();
         let mut all_activities = Vec::new();
@@ -75,7 +66,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             for act in cat.activities {
                 all_activities.push(ActivityWithCategory {
                     def: act,
-                    category: cat_metas.last().unwrap().id,
+                    category: cat_metas.last().unwrap().id.clone(),
                 });
             }
         }
@@ -87,7 +78,6 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             activities: StoredValue::new(all_activities),
             categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
-            next_id: RwSignal::new(max_id + 1),
             focused_pane: RwSignal::new(None),
             dragging_pane: RwSignal::new(None),
             mullion_theme,
@@ -109,42 +99,35 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         self.emit(PaneEvent::TreeChanged { tree });
     }
 
-    fn alloc_id(&self) -> PaneId {
-        let id = self.next_id.get_untracked();
-        self.next_id.set(id + 1);
-        PaneId(id)
-    }
-
-    /// Split a pane. Returns the new pane's id.
+    /// Split a pane. The consumer provides the new pane's id.
     pub fn split_pane(
         &self,
-        target: PaneId,
+        target: &PaneId,
         direction: SplitDirection,
+        new_id: PaneId,
         new_data: D,
-    ) -> PaneId {
-        let new_id = self.alloc_id();
+    ) {
         self.tree.update(|tree| {
-            tree.split(target, direction, new_id, new_data.clone());
+            tree.split(target, direction, new_id.clone(), new_data.clone());
         });
         self.emit(PaneEvent::Split {
-            target,
+            target: target.clone(),
             direction,
             new_id,
             new_data,
         });
         self.emit_tree_changed();
-        new_id
     }
 
     /// Close a pane. Returns the closed pane's data if found.
-    pub fn close_pane(&self, id: PaneId) -> Option<D> {
+    pub fn close_pane(&self, id: &PaneId) -> Option<D> {
         let mut closed_data = None;
         self.tree.update(|tree| {
             closed_data = tree.close(id);
         });
         if let Some(ref data) = closed_data {
             self.emit(PaneEvent::Closed {
-                id,
+                id: id.clone(),
                 data: data.clone(),
             });
             self.emit_tree_changed();
@@ -153,33 +136,33 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     }
 
     /// Resize the split containing a pane.
-    pub fn resize_pane(&self, pane: PaneId, ratio: f64) {
+    pub fn resize_pane(&self, pane: &PaneId, ratio: f64) {
         self.tree.update(|tree| {
             tree.set_ratio(pane, ratio);
         });
-        self.emit(PaneEvent::Resized { pane, ratio });
+        self.emit(PaneEvent::Resized { pane: pane.clone(), ratio });
         self.emit_tree_changed();
     }
 
     /// Change the split direction of a pane's parent.
-    pub fn change_split_direction(&self, pane: PaneId, direction: SplitDirection) {
+    pub fn change_split_direction(&self, pane: &PaneId, direction: SplitDirection) {
         self.tree.update(|tree| {
             tree.change_direction(pane, direction);
         });
-        self.emit(PaneEvent::DirectionChanged { pane, direction });
+        self.emit(PaneEvent::DirectionChanged { pane: pane.clone(), direction });
         self.emit_tree_changed();
     }
 
     /// Move a pane to a new position relative to a destination pane.
-    pub fn move_pane(&self, source: PaneId, destination: PaneId, edge: DropEdge) {
+    pub fn move_pane(&self, source: &PaneId, destination: &PaneId, edge: DropEdge) {
         let mut success = false;
         self.tree.update(|tree| {
             success = tree.move_pane(source, destination, edge);
         });
         if success {
             self.emit(PaneEvent::Moved {
-                source,
-                destination,
+                source: source.clone(),
+                destination: destination.clone(),
                 edge,
             });
             self.emit_tree_changed();
@@ -187,16 +170,17 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     }
 
     /// Set the active activity for a pane.
-    pub fn set_active_activity(&self, pane: PaneId, activity: Option<ActivityId>) {
+    pub fn set_active_activity(&self, pane: &PaneId, activity: Option<ActivityId>) {
+        let act_clone = activity.clone();
         self.tree.update(|tree| {
             if let Some(PaneNode::Leaf {
                 active_activity, ..
             }) = tree.find_mut(pane)
             {
-                *active_activity = activity;
+                *active_activity = act_clone;
             }
         });
-        self.emit(PaneEvent::ActivityChanged { pane, activity });
+        self.emit(PaneEvent::ActivityChanged { pane: pane.clone(), activity });
         self.emit_tree_changed();
     }
 
@@ -217,23 +201,42 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     }
 
     /// Look up an activity's category id.
-    pub fn activity_category(&self, activity_id: ActivityId) -> Option<CategoryId> {
+    pub fn activity_category(&self, activity_id: &ActivityId) -> Option<CategoryId> {
         self.activities.with_value(|acts| {
             acts.iter()
-                .find(|a| a.def.id == activity_id)
-                .map(|a| a.category)
+                .find(|a| a.def.id == *activity_id)
+                .map(|a| a.category.clone())
         })
+    }
+
+    /// Update a single pane's data without replacing the whole tree.
+    pub fn update_pane_data(&self, pane: &PaneId, new_data: D) {
+        self.tree.update(|tree| {
+            if let Some(PaneNode::Leaf { data, .. }) = tree.find_mut(pane) {
+                *data = new_data;
+            }
+        });
+        self.emit_tree_changed();
+    }
+
+    /// Get a pane's current data.
+    pub fn pane_data(&self, pane: &PaneId) -> Option<D> {
+        self.tree.with_untracked(|tree| {
+            match tree.find(pane) {
+                Some(PaneNode::Leaf { data, .. }) => Some(data.clone()),
+                _ => None,
+            }
+        })
+    }
+
+    /// Update the tree with a closure. Emits a TreeChanged event.
+    pub fn update_tree(&self, f: impl FnOnce(&mut PaneNode<D>)) {
+        self.tree.update(f);
+        self.emit_tree_changed();
     }
 
     /// Replace the entire tree (e.g., from an upstream server signal).
     pub fn set_tree(&self, new_tree: PaneNode<D>) {
-        let max_id = new_tree
-            .leaf_ids()
-            .into_iter()
-            .map(|id| id.0)
-            .max()
-            .unwrap_or(0);
-        self.next_id.set(max_id + 1);
         self.tree.set(new_tree);
     }
 

@@ -19,7 +19,7 @@ pub struct Category<D: PaneData> {
 impl<D: PaneData> Clone for Category<D> {
     fn clone(&self) -> Self {
         Category {
-            id: self.id,
+            id: self.id.clone(),
             name: self.name.clone(),
             order: self.order,
             icon: self.icon.clone(),
@@ -63,7 +63,7 @@ pub struct ActivityDef<D: PaneData> {
 impl<D: PaneData> Clone for ActivityDef<D> {
     fn clone(&self) -> Self {
         ActivityDef {
-            id: self.id,
+            id: self.id.clone(),
             name: self.name.clone(),
             icon: self.icon.clone(),
             filter: self.filter,
@@ -82,7 +82,7 @@ impl<D: PaneData> Clone for ActivityWithCategory<D> {
     fn clone(&self) -> Self {
         ActivityWithCategory {
             def: self.def.clone(),
-            category: self.category,
+            category: self.category.clone(),
         }
     }
 }

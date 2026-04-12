@@ -20,6 +20,7 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
     // We build the overlay outside the reactive closure so event handlers are Fn, not FnOnce.
     let overlay_view = {
         let ctx_drop = ctx.clone();
+        let pane_id_drop = pane_id.clone();
 
         let on_dragover = move |ev: web_sys::DragEvent| {
             ev.prevent_default();
@@ -66,8 +67,8 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
             ctx_drop.dragging_pane.set(None);
 
             if let (Some(source_id), Some(edge)) = (source, edge) {
-                if source_id != pane_id {
-                    ctx_drop.move_pane(source_id, pane_id, edge);
+                if source_id != pane_id_drop {
+                    ctx_drop.move_pane(&source_id, &pane_id_drop, edge);
                 }
             }
         };
@@ -90,7 +91,7 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
     view! {
         {move || {
             let is_dragging = dragging.get().is_some();
-            let is_self = dragging.get() == Some(pane_id);
+            let is_self = dragging.get().as_ref() == Some(&pane_id);
 
             if is_dragging && !is_self {
                 Some(overlay_view.clone())

@@ -30,20 +30,21 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
             let in_cat: Vec<_> = acts
                 .iter()
                 .filter(|a| a.category == cat.id)
-                .map(|a| (a.def.id, a.def.name.clone(), a.def.icon.clone()))
+                .map(|a| (a.def.id.clone(), a.def.name.clone(), a.def.icon.clone()))
                 .collect();
             if !in_cat.is_empty() {
-                groups.push((cat.id, cat.name.clone(), cat.icon.clone(), cat.color.clone(), in_cat));
+                groups.push((cat.id.clone(), cat.name.clone(), cat.icon.clone(), cat.color.clone(), in_cat));
             }
         }
         groups
     });
 
     let ctx_for_active = ctx.clone();
+    let pid_for_active = pane_id.clone();
     let active_activity = Memo::new(move |_| {
         let tree = ctx_for_active.tree.get();
-        match tree.find(pane_id) {
-            Some(crate::tree::PaneNode::Leaf { active_activity, .. }) => *active_activity,
+        match tree.find(&pid_for_active) {
+            Some(crate::tree::PaneNode::Leaf { active_activity, .. }) => active_activity.clone(),
             _ => None,
         }
     });
@@ -53,7 +54,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     Effect::new(move |_| {
         let active = active_activity.get();
         if let Some(act_id) = active {
-            if let Some(cat_id) = ctx_for_expand.activity_category(act_id) {
+            if let Some(cat_id) = ctx_for_expand.activity_category(&act_id) {
                 set_expanded_cat.set(Some(cat_id));
             }
         }
@@ -93,7 +94,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
 
     // Inject a <style> tag with a unique scope for :hover behavior.
     // This avoids signals entirely — the browser handles hover natively.
-    let scope_id = format!("mb-{}-{}", pane_id.0, (web_sys::js_sys::Math::random() * 1_000_000.0) as u64);
+    let scope_id = format!("mb-{}-{}", pane_id.0.replace(' ', "-"), (web_sys::js_sys::Math::random() * 1_000_000.0) as u64);
     let scope_cls = scope_id.clone();
 
     let css = format!(
@@ -145,14 +146,14 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                         );
                         let ctx_drag = ctx.clone();
                         let ctx_dragend = ctx.clone();
+                        let pid_drag = pane_id.clone();
                         view! {
                             <div style={app_style}
                                  draggable="true"
                                  on:dragstart=move |ev| {
-                                     ctx_drag.dragging_pane.set(Some(pane_id));
-                                     // Set drag data for HTML5 drag API
+                                     ctx_drag.dragging_pane.set(Some(pid_drag.clone()));
                                      if let Some(dt) = ev.data_transfer() {
-                                         let _ = dt.set_data("text/plain", &format!("{}", pane_id.0));
+                                         let _ = dt.set_data("text/plain", &pid_drag.0);
                                          dt.set_effect_allowed("move");
                                      }
                                  }
@@ -166,14 +167,17 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                             </div>
                         }
                     })}
-                    {move || {
+                    {
+                        let pane_id = pane_id.clone();
+                        move || {
+                        let pane_id = pane_id.clone(); // clone for each re-render
                         let groups = grouped.get();
                         let current_active = active_activity.get();
                         let current_expanded = expanded_cat.get();
 
                         groups.into_iter().map(|(cat_id, cat_name, cat_icon, cat_color, acts)| {
-                            let is_expanded = current_expanded == Some(cat_id);
-                            let has_active = acts.iter().any(|(id, _, _)| current_active == Some(*id));
+                            let is_expanded = current_expanded.as_ref() == Some(&cat_id);
+                            let has_active = acts.iter().any(|(id, _, _)| current_active.as_ref() == Some(id));
                             let cat_opacity = if is_expanded || has_active { icon_active_opacity.clone() } else { icon_opacity.clone() };
                             let show_dot = !is_expanded && has_active;
                             let dot_color = cat_color.clone();
@@ -184,11 +188,12 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                 btn_height, cat_opacity, icon_color, font_size
                             );
 
+                            let cat_id_click = cat_id.clone();
                             view! {
                                 <div>
                                     <button style={row_style.clone()} on:click=move |_| {
                                         if is_expanded { set_expanded_cat.set(None); }
-                                        else { set_expanded_cat.set(Some(cat_id)); }
+                                        else { set_expanded_cat.set(Some(cat_id_click.clone())); }
                                     }>
                                         <span style={icon_slot_style.clone()}>
                                             {if show_dot {
@@ -209,11 +214,12 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                             <div style="position:relative">
                                                 <div style={line_style}></div>
                                                 {acts.into_iter().map(|(act_id, name, icon)| {
-                                                    let is_active = current_active == Some(act_id);
+                                                    let is_active = current_active.as_ref() == Some(&act_id);
                                                     let opacity = if is_active { icon_active_opacity.clone() } else { icon_opacity.clone() };
                                                     let act_color = if is_active { cat_color_for_border.clone() } else { icon_color.clone() };
                                                     let act_stroke = if is_active { cat_color_for_border.clone() } else { icon_stroke_color.clone() };
                                                     let ctx = ctx.clone();
+                                                    let pid = pane_id.clone();
                                                     let act_row_style = format!(
                                                         "display:flex;align-items:center;height:{};cursor:pointer;opacity:{};color:{};white-space:nowrap;border:none;background:none;width:100%;text-align:left;font-size:{};padding:0",
                                                         btn_height, opacity, act_color, font_size
@@ -221,7 +227,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                                     let label = name.clone();
                                                     view! {
                                                         <button style={act_row_style} on:click=move |_| {
-                                                            ctx.set_active_activity(pane_id, Some(act_id));
+                                                            ctx.set_active_activity(&pid, Some(act_id.clone()));
                                                         }>
                                                             <span style={icon_slot_style.clone()}>
                                                                 {render_icon(&icon, &icon_size, &act_color, &act_stroke)}
@@ -258,20 +264,27 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                         let ctx_sh = ctx_actions.clone();
                         let ctx_sv = ctx_actions.clone();
                         let ctx_cl = ctx_actions.clone();
+                        let pid_sh = pane_id.clone();
+                        let pid_sv = pane_id.clone();
+                        let pid_cl = pane_id.clone();
                         view! {
                             <button style={s1} on:click=move |_| {
-                                let d = data.get(); ctx_sh.split_pane(pane_id, SplitDirection::Horizontal, d);
+                                let d = data.get();
+                                let new_id = PaneId::new(format!("{:.0}", web_sys::js_sys::Math::random() * 1e12));
+                                ctx_sh.split_pane(&pid_sh, SplitDirection::Horizontal, new_id, d);
                             }>
                                 <span style={sl1}><span inner_html=ICON_SPLIT_H style={is1}></span></span>
                                 <span class="mb-label">"Split H"</span>
                             </button>
                             <button style={s2} on:click=move |_| {
-                                let d = data.get(); ctx_sv.split_pane(pane_id, SplitDirection::Vertical, d);
+                                let d = data.get();
+                                let new_id = PaneId::new(format!("{:.0}", web_sys::js_sys::Math::random() * 1e12));
+                                ctx_sv.split_pane(&pid_sv, SplitDirection::Vertical, new_id, d);
                             }>
                                 <span style={sl2}><span inner_html=ICON_SPLIT_V style={is2}></span></span>
                                 <span class="mb-label">"Split V"</span>
                             </button>
-                            <button style={s3} on:click=move |_| { ctx_cl.close_pane(pane_id); }>
+                            <button style={s3} on:click=move |_| { ctx_cl.close_pane(&pid_cl); }>
                                 <span style={sl3}><span inner_html=ICON_CLOSE style={is3}></span></span>
                                 <span class="mb-label">"Close"</span>
                             </button>

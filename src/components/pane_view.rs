@@ -33,28 +33,33 @@ pub fn PaneView<D: PaneData + Send + Sync>(
             let pane_ref: NodeRef<leptos::html::Div> = NodeRef::new();
 
             // Register the DOM element once mounted
+            let id_for_ref = id.clone();
             Effect::new(move |_| {
                 if let Some(el) = pane_ref.get() {
                     let html_el: web_sys::HtmlElement = el.into();
-                    ctx_ref.register_pane_element(id, html_el);
+                    ctx_ref.register_pane_element(id_for_ref.clone(), html_el);
                 }
             });
 
+            let id_focus = id.clone();
+            let id_bar = id.clone();
+            let id_content = id.clone();
+            let id_drop = id.clone();
             view! {
                 <div style={pane_style}
                      node_ref=pane_ref
-                     on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id)); }>
+                     on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id_focus.clone())); }>
                     {
                         let app_icon = ctx.app_icon.clone();
                         if let Some(icon) = app_icon {
-                            view! { <ActivityBar pane_id=id data=data_read ctx=ctx.clone() app_icon=icon /> }.into_any()
+                            view! { <ActivityBar pane_id=id_bar.clone() data=data_read ctx=ctx.clone() app_icon=icon /> }.into_any()
                         } else {
-                            view! { <ActivityBar pane_id=id data=data_read ctx=ctx.clone() /> }.into_any()
+                            view! { <ActivityBar pane_id=id_bar.clone() data=data_read ctx=ctx.clone() /> }.into_any()
                         }
                     }
                     <div style="flex:1;overflow:hidden;position:relative">
-                        <PaneContent pane_id=id activity=active_activity data=data_read ctx=ctx.clone() />
-                        <DropOverlay pane_id=id ctx=ctx />
+                        <PaneContent pane_id=id_content activity=active_activity data=data_read ctx=ctx.clone() />
+                        <DropOverlay pane_id=id_drop ctx=ctx />
                     </div>
                 </div>
             }
@@ -103,7 +108,7 @@ pub fn PaneView<D: PaneData + Send + Sync>(
                                 direction=direction
                                 theme=handle_theme
                                 on_resize=Callback::new(move |ratio: f64| {
-                                    ctx.resize_pane(leaf_id, ratio);
+                                    ctx.resize_pane(&leaf_id, ratio);
                                 })
                             />
                         }

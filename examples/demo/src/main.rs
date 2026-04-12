@@ -25,81 +25,81 @@ impl Default for DemoData {
 fn categories() -> Vec<Category<DemoData>> {
     vec![
         Category {
-            id: CategoryId(0), name: "Explorer".into(), order: 0,
+            id: CategoryId::new("0"), name: "Explorer".into(), order: 0,
             icon: ActivityIcon::Svg(outlined::ICON_FOLDER.into()),
             color: "#75beff".into(),
             activities: vec![
                 ActivityDef {
-                    id: ActivityId(1), name: "Files".into(),
+                    id: ActivityId::new("1"), name: "Files".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_DESCRIPTION.into()),
                     filter: |d| d.show_files, render: |_pid, data| view! { <FilesActivity data=data /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(2), name: "Open Editors".into(),
+                    id: ActivityId::new("2"), name: "Open Editors".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_ARTICLE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Open Editors" /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(3), name: "Timeline".into(),
+                    id: ActivityId::new("3"), name: "Timeline".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_TIMELINE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Timeline" /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(4), name: "Outline".into(),
+                    id: ActivityId::new("4"), name: "Outline".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_LIST.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Outline" /> }.into_any(),
                 },
             ],
         },
         Category {
-            id: CategoryId(1), name: "Edit".into(), order: 1,
+            id: CategoryId::new("1"), name: "Edit".into(), order: 1,
             icon: ActivityIcon::Svg(outlined::ICON_EDIT_NOTE.into()),
             color: "#e8ab53".into(),
             activities: vec![
                 ActivityDef {
-                    id: ActivityId(5), name: "Search".into(),
+                    id: ActivityId::new("5"), name: "Search".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_SEARCH.into()),
                     filter: |d| d.show_search, render: |_pid, data| view! { <SearchActivity data=data /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(6), name: "Replace".into(),
+                    id: ActivityId::new("6"), name: "Replace".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_FIND_REPLACE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Replace" /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(7), name: "Bookmarks".into(),
+                    id: ActivityId::new("7"), name: "Bookmarks".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_BOOKMARKS.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Bookmarks" /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(8), name: "Snippets".into(),
+                    id: ActivityId::new("8"), name: "Snippets".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_CODE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Snippets" /> }.into_any(),
                 },
             ],
         },
         Category {
-            id: CategoryId(2), name: "Preferences".into(), order: 2,
+            id: CategoryId::new("2"), name: "Preferences".into(), order: 2,
             icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
             color: "#c586c0".into(),
             activities: vec![
                 ActivityDef {
-                    id: ActivityId(9), name: "Settings".into(),
+                    id: ActivityId::new("9"), name: "Settings".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
                     filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(10), name: "Themes".into(),
+                    id: ActivityId::new("10"), name: "Themes".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_PALETTE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Themes" /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(11), name: "Keybindings".into(),
+                    id: ActivityId::new("11"), name: "Keybindings".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_KEYBOARD.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Keybindings" /> }.into_any(),
                 },
                 ActivityDef {
-                    id: ActivityId(12), name: "Extensions".into(),
+                    id: ActivityId::new("12"), name: "Extensions".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_EXTENSION.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Extensions" /> }.into_any(),
                 },
@@ -161,9 +161,9 @@ fn default_workspace() -> PaneNode<DemoData> {
     PaneNode::Split {
         direction: SplitDirection::Horizontal,
         ratio: 0.5,
-        first: Box::new(PaneNode::leaf_with_activity(PaneId(1), ActivityId(1),
+        first: Box::new(PaneNode::leaf_with_activity(PaneId::new("1"), ActivityId::new("1"),
             DemoData { label: "Left".into(), ..Default::default() })),
-        second: Box::new(PaneNode::leaf_with_activity(PaneId(2), ActivityId(2),
+        second: Box::new(PaneNode::leaf_with_activity(PaneId::new("2"), ActivityId::new("2"),
             DemoData { label: "Right".into(), ..Default::default() })),
     }
 }
@@ -172,14 +172,14 @@ fn triple_workspace() -> PaneNode<DemoData> {
     PaneNode::Split {
         direction: SplitDirection::Horizontal,
         ratio: 0.33,
-        first: Box::new(PaneNode::leaf_with_activity(PaneId(10), ActivityId(1),
+        first: Box::new(PaneNode::leaf_with_activity(PaneId::new("10"), ActivityId::new("1"),
             DemoData { label: "Files".into(), ..Default::default() })),
         second: Box::new(PaneNode::Split {
             direction: SplitDirection::Horizontal,
             ratio: 0.5,
-            first: Box::new(PaneNode::leaf_with_activity(PaneId(11), ActivityId(2),
+            first: Box::new(PaneNode::leaf_with_activity(PaneId::new("11"), ActivityId::new("2"),
                 DemoData { label: "Search".into(), ..Default::default() })),
-            second: Box::new(PaneNode::leaf_with_activity(PaneId(12), ActivityId(3),
+            second: Box::new(PaneNode::leaf_with_activity(PaneId::new("12"), ActivityId::new("3"),
                 DemoData { label: "Settings".into(), ..Default::default() })),
         }),
     }
@@ -189,9 +189,9 @@ fn stacked_workspace() -> PaneNode<DemoData> {
     PaneNode::Split {
         direction: SplitDirection::Vertical,
         ratio: 0.5,
-        first: Box::new(PaneNode::leaf_with_activity(PaneId(20), ActivityId(1),
+        first: Box::new(PaneNode::leaf_with_activity(PaneId::new("20"), ActivityId::new("1"),
             DemoData { label: "Top".into(), ..Default::default() })),
-        second: Box::new(PaneNode::leaf_with_activity(PaneId(21), ActivityId(3),
+        second: Box::new(PaneNode::leaf_with_activity(PaneId::new("21"), ActivityId::new("3"),
             DemoData { label: "Bottom".into(), show_files: false, ..Default::default() })),
     }
 }

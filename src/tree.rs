@@ -1,13 +1,31 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct PaneId(pub u64);
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct PaneId(pub String);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct ActivityId(pub u64);
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct ActivityId(pub String);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct CategoryId(pub u64);
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct CategoryId(pub String);
+
+impl PaneId {
+    pub fn new(id: impl Into<String>) -> Self {
+        PaneId(id.into())
+    }
+}
+
+impl ActivityId {
+    pub fn new(id: impl Into<String>) -> Self {
+        ActivityId(id.into())
+    }
+}
+
+impl CategoryId {
+    pub fn new(id: impl Into<String>) -> Self {
+        CategoryId(id.into())
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SplitDirection {
@@ -86,9 +104,9 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Find a leaf by id (immutable).
-    pub fn find(&self, target: PaneId) -> Option<&PaneNode<D>> {
+    pub fn find(&self, target: &PaneId) -> Option<&PaneNode<D>> {
         match self {
-            PaneNode::Leaf { id, .. } if *id == target => Some(self),
+            PaneNode::Leaf { id, .. } if id == target => Some(self),
             PaneNode::Split { first, second, .. } => {
                 first.find(target).or_else(|| second.find(target))
             }
@@ -97,9 +115,9 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Find a leaf by id (mutable).
-    pub fn find_mut(&mut self, target: PaneId) -> Option<&mut PaneNode<D>> {
+    pub fn find_mut(&mut self, target: &PaneId) -> Option<&mut PaneNode<D>> {
         match self {
-            PaneNode::Leaf { id, .. } if *id == target => Some(self),
+            PaneNode::Leaf { id, .. } if id == target => Some(self),
             PaneNode::Split { first, second, .. } => {
                 first.find_mut(target).or_else(|| second.find_mut(target))
             }
@@ -108,18 +126,17 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Split a leaf pane. The original becomes `first`, new pane becomes `second`.
-    /// Returns true if the target was found and split.
     pub fn split(
         &mut self,
-        target: PaneId,
+        target: &PaneId,
         direction: SplitDirection,
         new_id: PaneId,
         new_data: D,
     ) -> bool {
         if let PaneNode::Leaf { id, active_activity, .. } = self {
-            if *id == target {
-                let inherit_activity = *active_activity;
-                let original = std::mem::replace(self, PaneNode::leaf(PaneId(0), new_data.clone()));
+            if id == target {
+                let inherit_activity = active_activity.clone();
+                let original = std::mem::replace(self, PaneNode::leaf(PaneId::new("__temp__"), new_data.clone()));
                 let new_leaf = PaneNode::Leaf {
                     id: new_id,
                     active_activity: inherit_activity,
@@ -135,7 +152,7 @@ impl<D: PaneData> PaneNode<D> {
             }
         }
         if let PaneNode::Split { first, second, .. } = self {
-            if first.split(target, direction, new_id, new_data.clone()) {
+            if first.split(target, direction, new_id.clone(), new_data.clone()) {
                 return true;
             }
             return second.split(target, direction, new_id, new_data);
@@ -144,37 +161,30 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Remove a pane, collapsing its parent split.
-    /// Must be called on the tree root. Returns the closed leaf's data if found.
-    pub fn close(&mut self, target: PaneId) -> Option<D> {
+    pub fn close(&mut self, target: &PaneId) -> Option<D> {
         self.close_inner(target).map(|(data, _)| data)
     }
 
-    fn close_inner(&mut self, target: PaneId) -> Option<(D, bool)> {
+    fn close_inner(&mut self, target: &PaneId) -> Option<(D, bool)> {
         match self {
-            PaneNode::Leaf { id, .. } if *id == target => {
-                // Can't close the root leaf from itself — caller handles replacement
-                None
-            }
+            PaneNode::Leaf { id, .. } if id == target => None,
             PaneNode::Split { first, second, .. } => {
-                // Check if first child is the target leaf
                 if let PaneNode::Leaf { id, data, .. } = first.as_ref() {
-                    if *id == target {
+                    if id == target {
                         let data = data.clone();
                         let sibling = *second.clone();
                         *self = sibling;
                         return Some((data, true));
                     }
                 }
-                // Check if second child is the target leaf
                 if let PaneNode::Leaf { id, data, .. } = second.as_ref() {
-                    if *id == target {
+                    if id == target {
                         let data = data.clone();
                         let sibling = *first.clone();
                         *self = sibling;
                         return Some((data, true));
                     }
                 }
-                // Recurse into children
                 if let Some(result) = first.close_inner(target) {
                     return Some(result);
                 }
@@ -185,28 +195,21 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Change the split direction of the immediate parent of `target`.
-    pub fn change_direction(&mut self, target: PaneId, new_direction: SplitDirection) -> bool {
+    pub fn change_direction(&mut self, target: &PaneId, new_direction: SplitDirection) -> bool {
         match self {
-            PaneNode::Split {
-                direction,
-                first,
-                second,
-                ..
-            } => {
+            PaneNode::Split { direction, first, second, .. } => {
                 let first_contains = first.contains(target);
                 let second_contains = second.contains(target);
                 if first_contains || second_contains {
-                    // Check if direct child
                     let is_direct_child = match (first.as_ref(), second.as_ref()) {
-                        (PaneNode::Leaf { id, .. }, _) if *id == target => true,
-                        (_, PaneNode::Leaf { id, .. }) if *id == target => true,
+                        (PaneNode::Leaf { id, .. }, _) if id == target => true,
+                        (_, PaneNode::Leaf { id, .. }) if id == target => true,
                         _ => false,
                     };
                     if is_direct_child {
                         *direction = new_direction;
                         return true;
                     }
-                    // Recurse
                     if first_contains {
                         return first.change_direction(target, new_direction);
                     }
@@ -219,21 +222,13 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Set the ratio of the deepest split whose `first` child contains `target`.
-    pub fn set_ratio(&mut self, target: PaneId, new_ratio: f64) -> bool {
+    pub fn set_ratio(&mut self, target: &PaneId, new_ratio: f64) -> bool {
         let clamped = new_ratio.clamp(0.1, 0.9);
         match self {
-            PaneNode::Split {
-                ratio,
-                first,
-                second,
-                ..
-            } => {
-                // Let deeper splits handle it first
+            PaneNode::Split { ratio, first, second, .. } => {
                 if first.set_ratio(target, new_ratio) || second.set_ratio(target, new_ratio) {
                     return true;
                 }
-                // No deeper split claimed it — if our first child contains the target,
-                // this is the split whose handle was dragged
                 if first.contains(target) {
                     *ratio = clamped;
                     return true;
@@ -245,31 +240,26 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Move a pane from one position to another.
-    /// The source pane is removed and inserted adjacent to the destination.
-    pub fn move_pane(&mut self, source: PaneId, destination: PaneId, edge: DropEdge) -> bool {
+    pub fn move_pane(&mut self, source: &PaneId, destination: &PaneId, edge: DropEdge) -> bool {
         if source == destination {
             return false;
         }
-        // Extract the source leaf data
         let source_leaf = match self.find(source) {
-            Some(PaneNode::Leaf { data, active_activity, .. }) => {
-                (data.clone(), *active_activity)
+            Some(PaneNode::Leaf { id, data, active_activity, .. }) => {
+                (id.clone(), data.clone(), active_activity.clone())
             }
             _ => return false,
         };
-        // Remove source from tree
         if self.close(source).is_none() {
-            // Source might be the root — can't move in that case
             return false;
         }
-        // Now insert at destination
         if let Some(dest_node) = self.find_mut(destination) {
             let direction = edge.split_direction();
-            let original = std::mem::replace(dest_node, PaneNode::leaf(PaneId(0), source_leaf.0.clone()));
+            let original = std::mem::replace(dest_node, PaneNode::leaf(PaneId::new("__temp__"), source_leaf.1.clone()));
             let new_leaf = PaneNode::Leaf {
-                id: source,
-                active_activity: source_leaf.1,
-                data: source_leaf.0,
+                id: source_leaf.0,
+                active_activity: source_leaf.2,
+                data: source_leaf.1,
             };
             let (first, second) = if edge.source_is_first() {
                 (Box::new(new_leaf), Box::new(original))
@@ -289,7 +279,7 @@ impl<D: PaneData> PaneNode<D> {
     }
 
     /// Check if this subtree contains a pane with the given id.
-    pub fn contains(&self, target: PaneId) -> bool {
+    pub fn contains(&self, target: &PaneId) -> bool {
         self.find(target).is_some()
     }
 
@@ -302,22 +292,11 @@ impl<D: PaneData> PaneNode<D> {
 
     fn collect_ids(&self, ids: &mut Vec<PaneId>) {
         match self {
-            PaneNode::Leaf { id, .. } => ids.push(*id),
+            PaneNode::Leaf { id, .. } => ids.push(id.clone()),
             PaneNode::Split { first, second, .. } => {
                 first.collect_ids(ids);
                 second.collect_ids(ids);
             }
         }
-    }
-
-    /// Return a new unique PaneId (max existing + 1).
-    pub fn next_id(&self) -> PaneId {
-        let max = self
-            .leaf_ids()
-            .into_iter()
-            .map(|id| id.0)
-            .max()
-            .unwrap_or(0);
-        PaneId(max + 1)
     }
 }

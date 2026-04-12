@@ -14,18 +14,20 @@ pub fn PaneContent<D: PaneData + Send + Sync>(
     let ctx_for_memo = ctx.clone();
     let resolved_activity = Memo::new(move |_| {
         let d = data.get();
-        if let Some(act_id) = activity {
+        if let Some(ref act_id) = activity {
             let available = ctx_for_memo.activities_for_pane(&d);
-            if available.iter().any(|a| a.def.id == act_id) {
-                return Some(act_id);
+            if available.iter().any(|a| a.def.id == *act_id) {
+                return Some(act_id.clone());
             }
         }
         let available = ctx_for_memo.activities_for_pane(&d);
-        available.first().map(|a| a.def.id)
+        available.first().map(|a| a.def.id.clone())
     });
 
     view! {
-        {move || {
+        {
+            let pane_id = pane_id.clone();
+            move || {
             let act_id = resolved_activity.get();
             match act_id {
                 Some(id) => {
@@ -33,7 +35,7 @@ pub fn PaneContent<D: PaneData + Send + Sync>(
                         acts.iter().find(|a| a.def.id == id).map(|a| a.def.render)
                     });
                     match render_fn {
-                        Some(render) => render(pane_id, data),
+                        Some(render) => render(pane_id.clone(), data),
                         None => view! { <div>"Activity not found"</div> }.into_any(),
                     }
                 }

@@ -14,6 +14,7 @@ Named after the vertical bars between window panes in architecture.
 - **Events** -- stream of pane events for persistence
 - **Upstream signals** -- update the tree live from server queries
 - **Pane data** -- generic consumer data per pane, filters which activities appear
+- **String IDs** -- all IDs (pane, activity, category) are string-based for stable persistence
 
 ## Quick start
 
@@ -30,14 +31,14 @@ struct MyData {
 fn App() -> impl IntoView {
     let categories = vec![
         Category {
-            id: CategoryId(0),
+            id: CategoryId::new("explorer"),
             name: "Explorer".into(),
             order: 0,
             icon: ActivityIcon::Svg("<svg>...</svg>".into()),
             color: "#75beff".into(),
             activities: vec![
                 ActivityDef {
-                    id: ActivityId(1),
+                    id: ActivityId::new("files"),
                     name: "Files".into(),
                     icon: ActivityIcon::Svg("<svg>...</svg>".into()),
                     filter: |_| true,
@@ -50,8 +51,8 @@ fn App() -> impl IntoView {
     ];
 
     let tree = PaneNode::leaf_with_activity(
-        PaneId(1),
-        ActivityId(1),
+        PaneId::new("main"),
+        ActivityId::new("files"),
         MyData { project: "my-app".into() },
     );
 
@@ -76,12 +77,14 @@ provide_context(ActivityBarTheme {
     icon_size: "14px".into(),
     background: "#111".into(),
     border: "1px solid #222".into(),
+    border_radius: "0".into(),
+    expanded_padding: "10px".into(),
+    font_size: "11px".into(),
     icon_color: "#eee".into(),
     icon_stroke_color: "#eee".into(),
     icon_opacity: "1".into(),
     icon_active_opacity: "1".into(),
     category_border_width: "2px".into(),
-    ..Default::default()
 });
 
 provide_context(PaneTheme {
@@ -104,6 +107,8 @@ provide_context(DropOverlayTheme {
 });
 ```
 
+Active activity icons automatically take their category's color.
+
 ## Components
 
 | Component | Purpose |
@@ -121,21 +126,26 @@ Available via `use_context::<MullionContext<D>>()` inside a `MullionProvider`:
 
 ```rust
 // Pane operations
-ctx.split_pane(pane_id, SplitDirection::Horizontal, new_data);
-ctx.close_pane(pane_id);
-ctx.resize_pane(pane_id, 0.5);
-ctx.move_pane(source_id, dest_id, DropEdge::Right);
-ctx.change_split_direction(pane_id, SplitDirection::Vertical);
-ctx.set_active_activity(pane_id, Some(ActivityId(1)));
+ctx.split_pane(&pane_id, SplitDirection::Horizontal, PaneId::new("new-pane"), new_data);
+ctx.close_pane(&pane_id);
+ctx.resize_pane(&pane_id, 0.5);
+ctx.move_pane(&source_id, &dest_id, DropEdge::Right);
+ctx.change_split_direction(&pane_id, SplitDirection::Vertical);
+ctx.set_active_activity(&pane_id, Some(ActivityId::new("files")));
+
+// Pane data
+ctx.update_pane_data(&pane_id, new_data);  // Update a single pane's data
+ctx.pane_data(&pane_id);                   // Read a pane's data
 
 // Read state
 ctx.focused_pane.get()       // Option<PaneId> -- pane under mouse
 ctx.dragging_pane.get()      // Option<PaneId> -- pane being dragged
-ctx.pane_element(pane_id)    // Option<HtmlElement> -- DOM ref
-ctx.pane_rect(pane_id)       // Option<DomRect> -- bounding rect
+ctx.pane_element(&pane_id)   // Option<HtmlElement> -- DOM ref for positioning
+ctx.pane_rect(&pane_id)      // Option<DomRect> -- bounding rect
 
 // Tree management
-ctx.set_tree(new_tree);      // Replace entire tree (e.g. from server)
+ctx.set_tree(new_tree);              // Replace entire tree (e.g. from server)
+ctx.update_tree(|tree| { ... });     // Mutate the tree in place
 ```
 
 ### Workspaces
@@ -148,6 +158,22 @@ let mgr = WorkspaceManager::new(vec![
 // Switch workspace
 if let Some(tree) = mgr.switch_to(&WorkspaceId("other".into())) {
     ctx.set_tree(tree);
+}
+```
+
+### Activity rendering
+
+Activity components receive pane data via `ReadSignal<D>`:
+
+```rust
+ActivityDef {
+    id: ActivityId::new("files"),
+    name: "Files".into(),
+    icon: ActivityIcon::Svg(md_icons::outlined::ICON_FOLDER.into()),
+    filter: |d| d.show_files,
+    render: |pane_id, data| {
+        view! { <FilesPanel data=data /> }.into_any()
+    },
 }
 ```
 

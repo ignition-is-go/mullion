@@ -1,5 +1,16 @@
 use leptos::prelude::*;
 
+use super::split_handle::{CLASS_SPLIT_BAR, CLASS_SPLIT_TARGET};
+
+fn split_handle_hover_css(theme: &SplitHandleTheme) -> String {
+    format!(
+        ".{target}:hover .{bar} {{ background: {color} !important; }}",
+        target = CLASS_SPLIT_TARGET,
+        bar = CLASS_SPLIT_BAR,
+        color = theme.hover_color,
+    )
+}
+
 use crate::activity::Category;
 use crate::context::MullionContext;
 use crate::events::PaneEvent;
@@ -37,6 +48,8 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let pane_theme = use_context::<PaneTheme>().unwrap_or_default();
     let drop_overlay_theme = use_context::<DropOverlayTheme>().unwrap_or_default();
 
+    let css = split_handle_hover_css(&split_handle_theme);
+
     let ctx = MullionContext::new(
         initial_tree,
         categories,
@@ -60,7 +73,10 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
 
     provide_context(ctx);
 
-    children()
+    view! {
+        <style>{css}</style>
+        {children()}
+    }
 }
 
 /// All-in-one component: provides context and renders the pane tree.
@@ -85,11 +101,14 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let pane_theme = use_context::<PaneTheme>().unwrap_or_default();
     let drop_overlay_theme = use_context::<DropOverlayTheme>().unwrap_or_default();
 
+    let css = split_handle_hover_css(&split_handle_theme);
+    let root_style = format!("width:100%;height:100%;background:{}", mullion_theme.background);
+
     let ctx = MullionContext::new(
         initial_tree,
         categories,
         on_event,
-        mullion_theme.clone(),
+        mullion_theme,
         activity_bar_theme,
         split_handle_theme,
         pane_theme,
@@ -109,9 +128,9 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     provide_context(ctx.clone());
 
     let tree = ctx.tree;
-    let root_style = format!("width:100%;height:100%;background:{}", mullion_theme.background);
 
     view! {
+        <style>{css}</style>
         <div style={root_style}>
             {move || {
                 let current_tree = tree.get();
@@ -127,9 +146,11 @@ pub fn MullionPaneTree<D: PaneData + Send + Sync>(
     ctx: MullionContext<D>,
 ) -> impl IntoView {
     let root_style = format!("width:100%;height:100%;background:{}", ctx.mullion_theme.background);
+    let css = split_handle_hover_css(&ctx.split_handle_theme);
     let tree = ctx.tree;
 
     view! {
+        <style>{css}</style>
         <div style={root_style}>
             {move || {
                 let current_tree = tree.get();

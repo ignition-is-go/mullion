@@ -222,6 +222,7 @@ fn App() -> impl IntoView {
     });
     provide_context(SplitHandleTheme {
         thickness: "2px".into(),
+        hover_target_thickness: "8px".into(),
         color: "#1a1a1a".into(),
         hover_color: "#333".into(),
     });

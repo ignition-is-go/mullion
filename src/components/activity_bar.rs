@@ -114,6 +114,9 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
             display: inline;
             overflow: hidden;
             text-overflow: ellipsis;
+        }}
+        .{scope} .mb-panel::-webkit-scrollbar {{
+            display: none;
         }}"#,
         scope = scope_cls,
         collapsed = bar_width,
@@ -127,7 +130,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     );
 
     let panel_style = format!(
-        "position:absolute;top:0;left:0;bottom:0;background:{};border-right:{};border-radius:{};z-index:10;display:flex;flex-direction:column;justify-content:space-between;overflow-y:auto;overflow-x:hidden",
+        "position:absolute;top:0;left:0;bottom:0;background:{};border-right:{};border-radius:{};z-index:10;display:flex;flex-direction:column;justify-content:space-between;overflow-y:auto;overflow-x:hidden;scrollbar-width:none",
         bar_bg, bar_border, bar_border_radius
     );
 

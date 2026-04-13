@@ -52,8 +52,11 @@ impl Default for ActivityBarTheme {
 /// Theme for split handles.
 #[derive(Clone, Debug)]
 pub struct SplitHandleTheme {
-    /// Thickness of the handle (e.g. "4px").
+    /// Thickness of the visible handle (e.g. "2px").
     pub thickness: String,
+    /// Thickness of the hover/drag target area (e.g. "8px").
+    /// This can be larger than `thickness` to make the handle easier to grab.
+    pub hover_target_thickness: String,
     /// Handle color.
     pub color: String,
     /// Handle color on hover.
@@ -64,6 +67,7 @@ impl Default for SplitHandleTheme {
     fn default() -> Self {
         SplitHandleTheme {
             thickness: "4px".into(),
+            hover_target_thickness: "8px".into(),
             color: "transparent".into(),
             hover_color: "#007acc".into(),
         }

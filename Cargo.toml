@@ -5,7 +5,7 @@ edition = "2021"
 description = "A Leptos library for splittable panes with activity bars"
 
 [dependencies]
-leptos = { version = "0.7", features = ["csr"] }
+leptos = { version = "0.8.17", features = ["csr"] }
 send_wrapper = "0.6.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

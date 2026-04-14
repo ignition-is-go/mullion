@@ -106,29 +106,91 @@ impl Default for ActivityBarStyle {
 
 impl css_styled::StyledComponentBase for ActivityBarStyle {
     fn base_css() -> &'static str {
-        static CSS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        CSS.get_or_init(|| format!(
-            "\
-.{scope} {{ flex-shrink: 0; position: relative; width: var(--ab-width); }}\n\
-.{panel} {{ position: absolute; top: 0; left: 0; bottom: 0; background: var(--ab-background); border-right: var(--ab-border); border-radius: var(--ab-border-radius); z-index: 10; display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; width: var(--ab-width); padding-right: 0; transition: width 0.15s ease, padding-right 0.15s ease; }}\n\
-.{panel}::-webkit-scrollbar {{ display: none; }}\n\
-.{scope}:hover .{panel} {{ width: var(--ab-expanded-width); padding-right: var(--ab-expanded-padding); }}\n\
-.{label} {{ display: none; overflow: hidden; text-overflow: ellipsis; }}\n\
-.{scope}:hover .{label} {{ display: inline; }}\n\
-.{icon_slot} {{ width: var(--ab-width); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }}\n\
-.{btn} {{ display: flex; align-items: center; height: var(--ab-width); cursor: pointer; white-space: nowrap; border: none; background: none; width: 100%; text-align: left; font-size: var(--ab-font-size); padding: 0; color: var(--ab-icon-color); opacity: var(--ab-icon-opacity); }}\n\
-.{icon} {{ display: flex; align-items: center; justify-content: center; width: var(--ab-icon-size); height: var(--ab-icon-size); flex-shrink: 0; overflow: hidden; }}\n\
-.{dot} {{ position: absolute; left: 2px; top: 50%; transform: translateY(-50%); width: 4px; height: 4px; border-radius: 50%; }}\n\
-.{cat_border} {{ position: absolute; left: 0; top: 0; bottom: 0; width: var(--ab-cat-border-width); }}",
-            scope = Self::SCOPE,
-            panel = Self::PANEL,
-            label = Self::LABEL,
-            icon_slot = Self::ICON_SLOT,
-            btn = Self::BTN,
-            icon = Self::ICON,
-            dot = Self::DOT,
-            cat_border = Self::CAT_BORDER,
-        )).as_str()
+        css_styled::css!(ActivityBarStyle, {
+            SCOPE {
+                flex-shrink: 0;
+                position: relative;
+                width: var(--ab-width);
+            }
+            PANEL {
+                position: absolute;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                background: var(--ab-background);
+                border-right: var(--ab-border);
+                border-radius: var(--ab-border-radius);
+                z-index: 10;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                overflow-y: auto;
+                overflow-x: hidden;
+                scrollbar-width: none;
+                width: var(--ab-width);
+                padding-right: 0;
+                transition: width 0.15s ease, padding-right 0.15s ease;
+            }
+            SCOPE:hover PANEL {
+                width: var(--ab-expanded-width);
+                padding-right: var(--ab-expanded-padding);
+            }
+            LABEL {
+                display: none;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            SCOPE:hover LABEL {
+                display: inline;
+            }
+            ICON_SLOT {
+                width: var(--ab-width);
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            BTN {
+                display: flex;
+                align-items: center;
+                height: var(--ab-width);
+                cursor: pointer;
+                white-space: nowrap;
+                border: none;
+                background: none;
+                width: 100%;
+                text-align: left;
+                font-size: var(--ab-font-size);
+                padding: 0;
+                color: var(--ab-icon-color);
+                opacity: var(--ab-icon-opacity);
+            }
+            ICON {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: var(--ab-icon-size);
+                height: var(--ab-icon-size);
+                flex-shrink: 0;
+                overflow: hidden;
+            }
+            DOT {
+                position: absolute;
+                left: 2px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 4px;
+                height: 4px;
+                border-radius: 50%;
+            }
+            CAT_BORDER {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: var(--ab-cat-border-width);
+            }
+        })
     }
 }
 

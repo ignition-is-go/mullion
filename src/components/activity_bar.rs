@@ -104,6 +104,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 padding: 0;
                 color: var(--ab-icon-color);
                 opacity: var(--ab-icon-opacity);
+                position: relative;
             }
             ICON {
                 display: flex;
@@ -238,9 +239,9 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                             let has_active = acts.iter().any(|(id, _, _)| current_active.as_ref() == Some(id));
                             let cat_active = is_expanded || has_active;
                             let cat_style = if cat_active {
-                                format!("opacity:{};position:relative", icon_active_opacity)
+                                ActivityBarStyle::vars(|v| v.icon_opacity(&icon_active_opacity))
                             } else {
-                                "position:relative".to_string()
+                                String::new()
                             };
                             let show_dot = !is_expanded && has_active;
                             let dot_color = cat_color.clone();
@@ -272,7 +273,10 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                                 {acts.into_iter().map(|(act_id, name, icon)| {
                                                     let is_active = current_active.as_ref() == Some(&act_id);
                                                     let active_style = if is_active {
-                                                        format!("opacity:{};color:{}", icon_active_opacity, cat_color_for_border)
+                                                        ActivityBarStyle::vars(|v| {
+                                                            v.icon_opacity(&icon_active_opacity)
+                                                             .icon_color(&cat_color_for_border)
+                                                        })
                                                     } else {
                                                         String::new()
                                                     };

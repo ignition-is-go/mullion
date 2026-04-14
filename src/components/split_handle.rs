@@ -32,34 +32,34 @@ pub struct SplitHandleStyle {
 
 impl css_styled::StyledComponentBase for SplitHandleStyle {
     fn base_css() -> &'static str {
-        css_styled::css!(SplitHandleStyle, {
-            SCOPE {
+        css_styled::css!(SplitHandleStyle, r#"
+            .{SCOPE} {
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
             }
-            SCOPE.HORIZONTAL {
+            .{SCOPE}.{HORIZONTAL} {
                 cursor: col-resize;
                 width: var(--msh-target-thickness);
             }
-            SCOPE.VERTICAL {
+            .{SCOPE}.{VERTICAL} {
                 cursor: row-resize;
                 height: var(--msh-target-thickness);
             }
-            BAR {
+            .{BAR} {
                 background: var(--msh-color);
                 pointer-events: none;
             }
-            SCOPE.HORIZONTAL BAR {
+            .{SCOPE}.{HORIZONTAL} .{BAR} {
                 width: var(--msh-thickness);
                 height: 100%;
             }
-            SCOPE.VERTICAL BAR {
+            .{SCOPE}.{VERTICAL} .{BAR} {
                 height: var(--msh-thickness);
                 width: 100%;
             }
-        })
+        "#)
     }
 }
 

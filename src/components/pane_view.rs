@@ -18,15 +18,15 @@ pub struct PaneStyle {
 
 impl css_styled::StyledComponentBase for PaneStyle {
     fn base_css() -> &'static str {
-        css_styled::css!(PaneStyle, {
-            SCOPE {
+        css_styled::css!(PaneStyle, r#"
+            .{SCOPE} {
                 display: flex;
                 flex-direction: row;
                 width: 100%;
                 height: 100%;
                 overflow: hidden;
             }
-        })
+        "#)
     }
 }
 

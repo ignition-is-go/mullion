@@ -26,12 +26,12 @@ pub struct MullionStyle {
 
 impl css_styled::StyledComponentBase for MullionStyle {
     fn base_css() -> &'static str {
-        css_styled::css!(MullionStyle, {
-            SCOPE {
+        css_styled::css!(MullionStyle, r#"
+            .{SCOPE} {
                 width: 100%;
                 height: 100%;
             }
-        })
+        "#)
     }
 }
 

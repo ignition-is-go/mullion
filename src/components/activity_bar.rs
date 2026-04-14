@@ -54,13 +54,13 @@ pub struct ActivityBarStyle {
 
 impl css_styled::StyledComponentBase for ActivityBarStyle {
     fn base_css() -> &'static str {
-        css_styled::css!(ActivityBarStyle, {
-            SCOPE {
+        css_styled::css!(ActivityBarStyle, r#"
+            .{SCOPE} {
                 flex-shrink: 0;
                 position: relative;
                 width: var(--ab-width);
             }
-            PANEL {
+            .{PANEL} {
                 position: absolute;
                 top: 0;
                 left: 0;
@@ -79,26 +79,26 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 padding-right: 0;
                 transition: width 0.15s ease, padding-right 0.15s ease;
             }
-            SCOPE:hover PANEL {
+            .{SCOPE}:hover .{PANEL} {
                 width: var(--ab-expanded-width);
                 padding-right: var(--ab-expanded-padding);
             }
-            LABEL {
+            .{LABEL} {
                 display: none;
                 overflow: hidden;
                 text-overflow: ellipsis;
             }
-            SCOPE:hover LABEL {
+            .{SCOPE}:hover .{LABEL} {
                 display: inline;
             }
-            ICON_SLOT {
+            .{ICON_SLOT} {
                 width: var(--ab-width);
                 flex-shrink: 0;
                 display: flex;
                 align-items: center;
                 justify-content: center;
             }
-            BTN {
+            .{BTN} {
                 display: flex;
                 align-items: center;
                 height: var(--ab-width);
@@ -114,7 +114,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 opacity: var(--ab-icon-opacity);
                 position: relative;
             }
-            ICON {
+            .{ICON} {
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -124,7 +124,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 overflow: hidden;
                 stroke: var(--ab-icon-stroke-color);
             }
-            DOT {
+            .{DOT} {
                 position: absolute;
                 left: 2px;
                 top: 50%;
@@ -134,7 +134,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 border-radius: 50%;
                 background: var(--ab-cat-color);
             }
-            CAT_BORDER {
+            .{CAT_BORDER} {
                 position: absolute;
                 left: 0;
                 top: 0;
@@ -142,7 +142,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 width: var(--ab-cat-border-width);
                 background: var(--ab-cat-color);
             }
-        })
+        "#)
     }
 }
 

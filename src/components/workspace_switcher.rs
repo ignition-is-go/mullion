@@ -33,12 +33,12 @@ pub struct WorkspaceSwitcherStyle {
 
 impl css_styled::StyledComponentBase for WorkspaceSwitcherStyle {
     fn base_css() -> &'static str {
-        css_styled::css!(WorkspaceSwitcherStyle, {
-            SCOPE {
+        css_styled::css!(WorkspaceSwitcherStyle, r#"
+            .{SCOPE} {
                 display: flex;
                 gap: var(--ws-gap);
             }
-            BTN {
+            .{BTN} {
                 border: none;
                 padding: var(--ws-padding);
                 border-radius: var(--ws-border-radius);
@@ -47,11 +47,11 @@ impl css_styled::StyledComponentBase for WorkspaceSwitcherStyle {
                 background: var(--ws-btn-bg);
                 color: var(--ws-btn-color);
             }
-            BTN.ACTIVE {
+            .{BTN}.{ACTIVE} {
                 background: var(--ws-btn-active-bg);
                 color: var(--ws-btn-active-color);
             }
-        })
+        "#)
     }
 }
 

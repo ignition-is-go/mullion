@@ -6,7 +6,7 @@ use send_wrapper::SendWrapper;
 
 use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarTheme, DropOverlayTheme, MullionTheme, PaneTheme, SplitHandleStyle};
+use crate::theme::{ActivityBarStyle, DropOverlayStyle, MullionStyle, PaneStyle, SplitHandleStyle};
 use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
 
 /// The reactive store for the mullion pane system.
@@ -28,11 +28,11 @@ pub struct MullionContext<D: PaneData> {
     /// Pane currently being dragged (for move operations).
     pub dragging_pane: RwSignal<Option<PaneId>>,
     /// Resolved themes (captured at provider time so they work in reactive closures).
-    pub mullion_theme: MullionTheme,
-    pub activity_bar_theme: ActivityBarTheme,
+    pub mullion_style: MullionStyle,
+    pub activity_bar_style: ActivityBarStyle,
     pub split_handle_style: SplitHandleStyle,
-    pub pane_theme: PaneTheme,
-    pub drop_overlay_theme: DropOverlayTheme,
+    pub pane_style: PaneStyle,
+    pub drop_overlay_style: DropOverlayStyle,
     /// Optional app icon displayed at the top of every activity bar.
     pub app_icon: Option<ActivityIcon>,
     /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
@@ -44,11 +44,11 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         initial_tree: PaneNode<D>,
         categories: Vec<Category<D>>,
         event_handler: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
-        mullion_theme: MullionTheme,
-        activity_bar_theme: ActivityBarTheme,
+        mullion_style: MullionStyle,
+        activity_bar_style: ActivityBarStyle,
         split_handle_style: SplitHandleStyle,
-        pane_theme: PaneTheme,
-        drop_overlay_theme: DropOverlayTheme,
+        pane_style: PaneStyle,
+        drop_overlay_style: DropOverlayStyle,
         app_icon: Option<ActivityIcon>,
     ) -> Self {
         // Flatten categories into metadata + activities with category ids
@@ -80,11 +80,11 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             event_tx: StoredValue::new(Box::new(event_handler)),
             focused_pane: RwSignal::new(None),
             dragging_pane: RwSignal::new(None),
-            mullion_theme,
-            activity_bar_theme,
+            mullion_style,
+            activity_bar_style,
             split_handle_style,
-            pane_theme,
-            drop_overlay_theme,
+            pane_style,
+            drop_overlay_style,
             app_icon,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }

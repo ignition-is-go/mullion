@@ -205,7 +205,7 @@ fn App() -> impl IntoView {
     ];
     let workspace_mgr = WorkspaceManager::new(workspaces, WorkspaceId("default".into()));
 
-    provide_context(ActivityBarTheme {
+    provide_context(ActivityBarStyle {
         width: "28px".into(),
         expanded_width: "150px".into(),
         icon_size: "14px".into(),
@@ -226,15 +226,15 @@ fn App() -> impl IntoView {
         color: "#1a1a1a".into(),
         hover_color: "#333".into(),
     });
-    provide_context(PaneTheme {
+    provide_context(PaneStyle {
         background: "#111111".into(),
         color: "#eee".into(),
     });
-    provide_context(MullionTheme {
+    provide_context(MullionStyle {
         background: "#0e0e0e".into(),
     });
 
-    provide_context(DropOverlayTheme {
+    provide_context(DropOverlayStyle {
         indicator_color: "rgba(255,255,255,0.06)".into(),
     });
 

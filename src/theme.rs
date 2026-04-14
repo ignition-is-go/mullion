@@ -1,37 +1,44 @@
-/// Theme for the activity bar.
-#[derive(Clone, Debug)]
-pub struct ActivityBarTheme {
-    /// Width of the activity bar when collapsed (e.g. "28px").
+/// Style for the activity bar, powered by css-styled.
+///
+/// All customizable values are CSS custom properties. Hover behavior and
+/// structural layout come from base CSS. Active/inactive opacity is applied
+/// via inline styles since it varies per-button at runtime.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-ab")]
+#[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border"))]
+#[component(base_css)]
+pub struct ActivityBarStyle {
+    #[prop(var = "--ab-width")]
     pub width: String,
-    /// Width of the activity bar when expanded/hovered (e.g. "150px").
+    #[prop(var = "--ab-expanded-width")]
     pub expanded_width: String,
-    /// Size of activity icons (e.g. "14px").
+    #[prop(var = "--ab-icon-size")]
     pub icon_size: String,
-    /// Background color of the bar.
+    #[prop(var = "--ab-background")]
     pub background: String,
-    /// Border (CSS shorthand, e.g. "1px solid #333").
+    #[prop(var = "--ab-border")]
     pub border: String,
-    /// Border radius.
+    #[prop(var = "--ab-border-radius")]
     pub border_radius: String,
-    /// Padding right when expanded (space after labels).
+    #[prop(var = "--ab-expanded-padding")]
     pub expanded_padding: String,
-    /// Font size for labels.
+    #[prop(var = "--ab-font-size")]
     pub font_size: String,
-    /// Icon fill color.
+    #[prop(var = "--ab-icon-color")]
     pub icon_color: String,
-    /// Icon stroke color.
+    #[prop(var = "--ab-icon-stroke-color")]
     pub icon_stroke_color: String,
-    /// Icon opacity when inactive.
+    #[prop(var = "--ab-icon-opacity")]
     pub icon_opacity: String,
-    /// Icon opacity when active.
+    #[prop(var = "--ab-icon-active-opacity")]
     pub icon_active_opacity: String,
-    /// Width of the category border on expanded activity lists.
+    #[prop(var = "--ab-cat-border-width")]
     pub category_border_width: String,
 }
 
-impl Default for ActivityBarTheme {
+impl Default for ActivityBarStyle {
     fn default() -> Self {
-        ActivityBarTheme {
+        ActivityBarStyle {
             width: "28px".into(),
             expanded_width: "150px".into(),
             icon_size: "14px".into(),
@@ -46,6 +53,32 @@ impl Default for ActivityBarTheme {
             icon_active_opacity: "1".into(),
             category_border_width: "2px".into(),
         }
+    }
+}
+
+impl css_styled::StyledComponentBase for ActivityBarStyle {
+    fn base_css() -> &'static str {
+        static CSS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+        CSS.get_or_init(|| format!(
+            "\
+.{scope} {{ flex-shrink: 0; position: relative; width: var(--ab-width); }}\n\
+.{panel} {{ position: absolute; top: 0; left: 0; bottom: 0; background: var(--ab-background); border-right: var(--ab-border); border-radius: var(--ab-border-radius); z-index: 10; display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; width: var(--ab-width); padding-right: 0; transition: width 0.15s ease, padding-right 0.15s ease; }}\n\
+.{panel}::-webkit-scrollbar {{ display: none; }}\n\
+.{scope}:hover .{panel} {{ width: var(--ab-expanded-width); padding-right: var(--ab-expanded-padding); }}\n\
+.{label} {{ display: none; overflow: hidden; text-overflow: ellipsis; }}\n\
+.{scope}:hover .{label} {{ display: inline; }}\n\
+.{icon_slot} {{ width: var(--ab-width); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }}\n\
+.{btn} {{ display: flex; align-items: center; height: var(--ab-width); cursor: pointer; white-space: nowrap; border: none; background: none; width: 100%; text-align: left; font-size: var(--ab-font-size); padding: 0; color: var(--ab-icon-color); }}\n\
+.{dot} {{ position: absolute; left: 2px; top: 50%; transform: translateY(-50%); width: 4px; height: 4px; border-radius: 50%; }}\n\
+.{cat_border} {{ position: absolute; left: 0; top: 0; bottom: 0; }}",
+            scope = Self::SCOPE,
+            panel = Self::PANEL,
+            label = Self::LABEL,
+            icon_slot = Self::ICON_SLOT,
+            btn = Self::BTN,
+            dot = Self::DOT,
+            cat_border = Self::CAT_BORDER,
+        )).as_str()
     }
 }
 
@@ -113,50 +146,97 @@ impl css_styled::StyledComponentBase for SplitHandleStyle {
     }
 }
 
-/// Theme for leaf panes.
-#[derive(Clone, Debug)]
-pub struct PaneTheme {
-    /// Background color of pane content area.
+/// Style for leaf panes, powered by css-styled.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-pane")]
+#[component(base_css)]
+pub struct PaneStyle {
+    #[prop(css = "background")]
     pub background: String,
-    /// Text color.
+    #[prop(css = "color")]
     pub color: String,
 }
 
-impl Default for PaneTheme {
+impl Default for PaneStyle {
     fn default() -> Self {
-        PaneTheme {
+        PaneStyle {
             background: "transparent".into(),
             color: "inherit".into(),
         }
     }
 }
 
-/// Theme for the drag-and-drop overlay.
-#[derive(Clone, Debug)]
-pub struct DropOverlayTheme {
-    /// Background color of the drop zone indicator.
+impl css_styled::StyledComponentBase for PaneStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(PaneStyle, {
+            SCOPE {
+                display: flex;
+                flex-direction: row;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+            }
+        })
+    }
+}
+
+/// Style for the drag-and-drop overlay, powered by css-styled.
+///
+/// The indicator color is a CSS variable applied to the base styling.
+/// Edge-specific positioning (left/right/top/bottom/width/height) stays
+/// as inline styles since it is driven by runtime drag state.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-drop")]
+#[component(base_css)]
+pub struct DropOverlayStyle {
+    #[prop(var = "--drop-indicator-color")]
     pub indicator_color: String,
 }
 
-impl Default for DropOverlayTheme {
+impl Default for DropOverlayStyle {
     fn default() -> Self {
-        DropOverlayTheme {
+        DropOverlayStyle {
             indicator_color: "rgba(0,122,204,0.3)".into(),
         }
     }
 }
 
-/// Top-level theme for the mullion root container.
-#[derive(Clone, Debug)]
-pub struct MullionTheme {
-    /// Background color of the root.
+impl css_styled::StyledComponentBase for DropOverlayStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(DropOverlayStyle, {
+            SCOPE {
+                position: absolute;
+                pointer-events: none;
+                background: var(--drop-indicator-color);
+            }
+        })
+    }
+}
+
+/// Style for the mullion root container, powered by css-styled.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-root")]
+#[component(base_css)]
+pub struct MullionStyle {
+    #[prop(css = "background")]
     pub background: String,
 }
 
-impl Default for MullionTheme {
+impl Default for MullionStyle {
     fn default() -> Self {
-        MullionTheme {
+        MullionStyle {
             background: "transparent".into(),
         }
+    }
+}
+
+impl css_styled::StyledComponentBase for MullionStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(MullionStyle, {
+            SCOPE {
+                width: 100%;
+                height: 100%;
+            }
+        })
     }
 }

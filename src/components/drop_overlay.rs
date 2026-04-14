@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::context::MullionContext;
+use crate::theme::DropOverlayStyle;
 use crate::tree::{DropEdge, PaneData, PaneId};
 
 /// Overlay that appears on a pane during drag operations.
@@ -14,7 +15,6 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
 ) -> impl IntoView {
     let (hover_edge, set_hover_edge) = signal(Option::<DropEdge>::None);
     let dragging = ctx.dragging_pane;
-    let indicator_color = ctx.drop_overlay_theme.indicator_color.clone();
 
     // These are non-reactive — rendered once when the overlay is visible.
     // We build the overlay outside the reactive closure so event handlers are Fn, not FnOnce.
@@ -80,8 +80,8 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
                  on:drop=on_drop>
                 {move || {
                     hover_edge.get().map(|e| {
-                        let style = edge_indicator_style(e, &indicator_color);
-                        view! { <div style={style}></div> }
+                        let style = edge_indicator_style(e);
+                        view! { <div class=DropOverlayStyle::SCOPE style={style}></div> }
                     })
                 }}
             </div>
@@ -102,8 +102,8 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
     }
 }
 
-fn edge_indicator_style(edge: DropEdge, color: &str) -> String {
-    let base = format!("position:absolute;background:{};transition:all 0.1s ease;pointer-events:none", color);
+fn edge_indicator_style(edge: DropEdge) -> String {
+    let base = "transition:all 0.1s ease";
     match edge {
         DropEdge::Left => format!("{};left:0;top:0;bottom:0;width:50%", base),
         DropEdge::Right => format!("{};right:0;top:0;bottom:0;width:50%", base),

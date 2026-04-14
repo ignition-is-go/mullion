@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 
 use crate::context::MullionContext;
+use crate::theme::PaneStyle;
 use crate::tree::{PaneData, PaneNode, SplitDirection};
 
 use super::activity_bar::ActivityBar;
@@ -20,13 +21,7 @@ pub fn PaneView<D: PaneData + Send + Sync>(
             active_activity,
             data,
         } => {
-            let pane_theme = &ctx.pane_theme;
             let (data_read, _data_write) = signal(data);
-
-            let pane_style = format!(
-                "display:flex;flex-direction:row;width:100%;height:100%;overflow:hidden;background:{};color:{}",
-                pane_theme.background, pane_theme.color
-            );
 
             let ctx_focus = ctx.clone();
             let ctx_ref = ctx.clone();
@@ -46,7 +41,7 @@ pub fn PaneView<D: PaneData + Send + Sync>(
             let id_content = id.clone();
             let id_drop = id.clone();
             view! {
-                <div style={pane_style}
+                <div class=PaneStyle::SCOPE
                      node_ref=pane_ref
                      on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id_focus.clone())); }>
                     {

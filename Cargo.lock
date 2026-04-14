@@ -394,6 +394,7 @@ dependencies = [
 [[package]]
 name = "css-spec-data"
 version = "0.1.0"
+source = "git+https://github.com/ignition-is-go/css-styled.git#b88a44ce818be5a6bd67d72d6e475fe9d944e3a4"
 dependencies = [
  "serde",
  "serde_json",
@@ -403,6 +404,7 @@ dependencies = [
 [[package]]
 name = "css-styled"
 version = "0.1.0"
+source = "git+https://github.com/ignition-is-go/css-styled.git#b88a44ce818be5a6bd67d72d6e475fe9d944e3a4"
 dependencies = [
  "css-spec-data",
  "css-styled-derive",
@@ -411,6 +413,7 @@ dependencies = [
 [[package]]
 name = "css-styled-derive"
 version = "0.1.0"
+source = "git+https://github.com/ignition-is-go/css-styled.git#b88a44ce818be5a6bd67d72d6e475fe9d944e3a4"
 dependencies = [
  "css-spec-data",
  "lightningcss",

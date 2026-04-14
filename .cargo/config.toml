@@ -1,2 +1,2 @@
 [patch."https://github.com/ignition-is-go/css-styled.git"]
-css-styled = { path = "../css-styled/css-styled" }
+# css-styled = { path = "../css-styled/css-styled" }

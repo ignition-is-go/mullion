@@ -135,14 +135,40 @@ The derive generates:
    impl SplitHandleStyle {
        pub const SCOPE: &str = "split-handle";
        pub const BAR: &str = "split-handle-bar";
-       pub const HORIZONTAL: &str = "horizontal";
-       pub const VERTICAL: &str = "vertical";
    }
    ```
 
-2. `impl IntoCss for SplitHandleStyle` that groups fields by (on, pseudo) into CSS rule blocks, scoped under the scope class.
+2. A modifier enum and `class()` method for type-safe class name construction:
+   ```rust
+   pub enum SplitHandleModifier {
+       Horizontal,
+       Vertical,
+   }
 
-3. `impl Default for SplitHandleStyle` is expected to be provided by the user.
+   impl SplitHandleStyle {
+       /// Returns the scope class combined with the given modifiers.
+       /// e.g. class(&[Horizontal]) => "split-handle horizontal"
+       /// e.g. class(&[Horizontal, Disabled]) => "split-handle horizontal disabled"
+       /// e.g. class(&[]) => "split-handle"
+       pub fn class(modifiers: &[SplitHandleModifier]) -> String { ... }
+   }
+   ```
+
+   This works reactively in Leptos when called inside a closure:
+   ```rust
+   view! {
+       <div class=move || {
+           let mut mods = vec![SplitHandleModifier::Horizontal];
+           if is_disabled.get() {
+               mods.push(SplitHandleModifier::Disabled);
+           }
+           SplitHandleStyle::class(&mods)
+       }>
+   ```
+
+3. `impl IntoCss for SplitHandleStyle` that groups fields by (on, pseudo) into CSS rule blocks, scoped under the scope class.
+
+4. `impl Default for SplitHandleStyle` is expected to be provided by the user.
 
 #### Compile-time checks
 
@@ -348,17 +374,17 @@ pub fn SplitHandle(
     on_resize: Callback<f64>,
     style: SplitHandleStyle,
 ) -> impl IntoView {
-    let modifier = match direction {
-        SplitDirection::Horizontal => SplitHandleStyle::HORIZONTAL,
-        SplitDirection::Vertical => SplitHandleStyle::VERTICAL,
-    };
-
     let on_mousedown = move |ev: MouseEvent| {
         // ... drag logic unchanged
     };
 
+    let modifier = match direction {
+        SplitDirection::Horizontal => SplitHandleModifier::Horizontal,
+        SplitDirection::Vertical => SplitHandleModifier::Vertical,
+    };
+
     view! {
-        <div class=format!("{} {}", SplitHandleStyle::SCOPE, modifier) on:mousedown=on_mousedown>
+        <div class=SplitHandleStyle::class(&[modifier]) on:mousedown=on_mousedown>
             <div class=SplitHandleStyle::BAR />
         </div>
     }

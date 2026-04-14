@@ -1,8 +1,43 @@
 use leptos::prelude::*;
 
 use crate::context::MullionContext;
-use crate::theme::PaneStyle;
+use crate::theme::MullionTheme;
 use crate::tree::{PaneData, PaneNode, SplitDirection};
+
+/// Style for leaf panes, powered by css-styled.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-pane")]
+#[component(theme = MullionTheme)]
+#[component(base_css)]
+pub struct PaneStyle {
+    #[prop(css = "background")]
+    pub background: String,
+    #[prop(css = "color")]
+    pub color: String,
+}
+
+impl Default for PaneStyle {
+    fn default() -> Self {
+        PaneStyle {
+            background: "var(--ml-surface)".into(),
+            color: "var(--ml-text)".into(),
+        }
+    }
+}
+
+impl css_styled::StyledComponentBase for PaneStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(PaneStyle, {
+            SCOPE {
+                display: flex;
+                flex-direction: row;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+            }
+        })
+    }
+}
 
 use super::activity_bar::ActivityBar;
 use super::drop_overlay::DropOverlay;

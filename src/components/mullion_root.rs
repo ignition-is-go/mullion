@@ -5,10 +5,42 @@ use css_styled::{IntoCss, IntoThemeCss};
 use crate::activity::Category;
 use crate::context::MullionContext;
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarStyle, DropOverlayStyle, MullionStyle, MullionTheme, PaneStyle, SplitHandleStyle};
+use crate::theme::MullionTheme;
 use crate::tree::{PaneData, PaneNode};
 
-use super::pane_view::PaneView;
+use super::activity_bar::ActivityBarStyle;
+use super::drop_overlay::DropOverlayStyle;
+use super::pane_view::{PaneStyle, PaneView};
+use super::split_handle::SplitHandleStyle;
+
+/// Style for the mullion root container, powered by css-styled.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-root")]
+#[component(theme = MullionTheme)]
+#[component(base_css)]
+pub struct MullionStyle {
+    #[prop(css = "background")]
+    pub background: String,
+}
+
+impl Default for MullionStyle {
+    fn default() -> Self {
+        MullionStyle {
+            background: "var(--ml-bg)".into(),
+        }
+    }
+}
+
+impl css_styled::StyledComponentBase for MullionStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(MullionStyle, {
+            SCOPE {
+                width: 100%;
+                height: 100%;
+            }
+        })
+    }
+}
 
 /// Context-only provider for the mullion pane system.
 ///

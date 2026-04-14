@@ -6,7 +6,12 @@ use send_wrapper::SendWrapper;
 
 use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarStyle, DropOverlayStyle, MullionStyle, MullionTheme, PaneStyle, SplitHandleStyle};
+use crate::components::activity_bar::ActivityBarStyle;
+use crate::components::drop_overlay::DropOverlayStyle;
+use crate::components::mullion_root::MullionStyle;
+use crate::components::pane_view::PaneStyle;
+use crate::components::split_handle::SplitHandleStyle;
+use crate::theme::MullionTheme;
 use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
 
 /// The reactive store for the mullion pane system.

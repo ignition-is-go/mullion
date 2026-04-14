@@ -6,8 +6,73 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::MouseEvent;
 
-use crate::theme::{SplitHandleModifier, SplitHandleStyle};
+use crate::theme::MullionTheme;
 use crate::tree::SplitDirection;
+
+/// Style for split handles, powered by css-styled.
+///
+/// Generates scoped CSS with typed class names, CSS custom properties,
+/// and spec-validated base CSS.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "msh")]
+#[component(theme = MullionTheme)]
+#[component(class(bar = "msh-bar"))]
+#[component(modifier(horizontal, vertical))]
+#[component(base_css)]
+pub struct SplitHandleStyle {
+    #[prop(var = "--msh-thickness")]
+    pub thickness: String,
+    #[prop(var = "--msh-target-thickness")]
+    pub hover_target_thickness: String,
+    #[prop(var = "--msh-color")]
+    pub color: String,
+    #[prop(css = "background", on = bar, pseudo = ":hover")]
+    pub hover_color: String,
+}
+
+impl Default for SplitHandleStyle {
+    fn default() -> Self {
+        SplitHandleStyle {
+            thickness: "4px".into(),
+            hover_target_thickness: "8px".into(),
+            color: "var(--ml-border)".into(),
+            hover_color: "var(--ml-highlight)".into(),
+        }
+    }
+}
+
+impl css_styled::StyledComponentBase for SplitHandleStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(SplitHandleStyle, {
+            SCOPE {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            SCOPE.HORIZONTAL {
+                cursor: col-resize;
+                width: var(--msh-target-thickness);
+            }
+            SCOPE.VERTICAL {
+                cursor: row-resize;
+                height: var(--msh-target-thickness);
+            }
+            BAR {
+                background: var(--msh-color);
+                pointer-events: none;
+            }
+            SCOPE.HORIZONTAL BAR {
+                width: var(--msh-thickness);
+                height: 100%;
+            }
+            SCOPE.VERTICAL BAR {
+                height: var(--msh-thickness);
+                width: 100%;
+            }
+        })
+    }
+}
 
 /// A draggable handle between two split panes for resizing.
 ///

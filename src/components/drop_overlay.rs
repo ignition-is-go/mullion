@@ -2,8 +2,42 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::context::MullionContext;
-use crate::theme::DropOverlayStyle;
+use crate::theme::MullionTheme;
 use crate::tree::{DropEdge, PaneData, PaneId};
+
+/// Style for the drag-and-drop overlay, powered by css-styled.
+///
+/// The indicator color is a CSS variable applied to the base styling.
+/// Edge-specific positioning (left/right/top/bottom/width/height) stays
+/// as inline styles since it is driven by runtime drag state.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-drop")]
+#[component(theme = MullionTheme)]
+#[component(base_css)]
+pub struct DropOverlayStyle {
+    #[prop(var = "--drop-indicator-color")]
+    pub indicator_color: String,
+}
+
+impl Default for DropOverlayStyle {
+    fn default() -> Self {
+        DropOverlayStyle {
+            indicator_color: "var(--ml-drop-indicator)".into(),
+        }
+    }
+}
+
+impl css_styled::StyledComponentBase for DropOverlayStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(DropOverlayStyle, {
+            SCOPE {
+                position: absolute;
+                pointer-events: none;
+                background: var(--drop-indicator-color);
+            }
+        })
+    }
+}
 
 /// Overlay that appears on a pane during drag operations.
 /// Detects which edge the cursor is over and highlights it.

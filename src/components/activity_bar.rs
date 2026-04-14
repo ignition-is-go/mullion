@@ -2,8 +2,157 @@ use leptos::prelude::*;
 
 use crate::activity::ActivityIcon;
 use crate::context::MullionContext;
-use crate::theme::ActivityBarStyle;
+use crate::theme::MullionTheme;
 use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
+
+/// Style for the activity bar, powered by css-styled.
+///
+/// All customizable values are CSS custom properties. Hover behavior and
+/// structural layout come from base CSS. Active/inactive opacity is applied
+/// via inline styles since it varies per-button at runtime.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-ab")]
+#[component(theme = MullionTheme)]
+#[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border", icon = "mullion-ab-icon"))]
+#[component(base_css)]
+pub struct ActivityBarStyle {
+    #[prop(var = "--ab-width")]
+    pub width: String,
+    #[prop(var = "--ab-expanded-width")]
+    pub expanded_width: String,
+    #[prop(var = "--ab-icon-size")]
+    pub icon_size: String,
+    #[prop(var = "--ab-background")]
+    pub background: String,
+    #[prop(var = "--ab-border")]
+    pub border: String,
+    #[prop(var = "--ab-border-radius")]
+    pub border_radius: String,
+    #[prop(var = "--ab-expanded-padding")]
+    pub expanded_padding: String,
+    #[prop(var = "--ab-font-size")]
+    pub font_size: String,
+    #[prop(var = "--ab-icon-color")]
+    pub icon_color: String,
+    #[prop(var = "--ab-icon-stroke-color")]
+    pub icon_stroke_color: String,
+    #[prop(var = "--ab-icon-opacity")]
+    pub icon_opacity: String,
+    #[prop(var = "--ab-icon-active-opacity")]
+    pub icon_active_opacity: String,
+    #[prop(var = "--ab-cat-border-width")]
+    pub category_border_width: String,
+}
+
+impl Default for ActivityBarStyle {
+    fn default() -> Self {
+        ActivityBarStyle {
+            width: "28px".into(),
+            expanded_width: "150px".into(),
+            icon_size: "14px".into(),
+            background: "var(--ml-surface)".into(),
+            border: "1px solid var(--ml-border)".into(),
+            border_radius: "0".into(),
+            expanded_padding: "8px".into(),
+            font_size: "11px".into(),
+            icon_color: "var(--ml-text)".into(),
+            icon_stroke_color: "var(--ml-text)".into(),
+            icon_opacity: "0.5".into(),
+            icon_active_opacity: "1".into(),
+            category_border_width: "2px".into(),
+        }
+    }
+}
+
+impl css_styled::StyledComponentBase for ActivityBarStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(ActivityBarStyle, {
+            SCOPE {
+                flex-shrink: 0;
+                position: relative;
+                width: var(--ab-width);
+            }
+            PANEL {
+                position: absolute;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                background: var(--ab-background);
+                border-right: var(--ab-border);
+                border-radius: var(--ab-border-radius);
+                z-index: 10;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                overflow-y: auto;
+                overflow-x: hidden;
+                scrollbar-width: none;
+                width: var(--ab-width);
+                padding-right: 0;
+                transition: width 0.15s ease, padding-right 0.15s ease;
+            }
+            SCOPE:hover PANEL {
+                width: var(--ab-expanded-width);
+                padding-right: var(--ab-expanded-padding);
+            }
+            LABEL {
+                display: none;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            SCOPE:hover LABEL {
+                display: inline;
+            }
+            ICON_SLOT {
+                width: var(--ab-width);
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            BTN {
+                display: flex;
+                align-items: center;
+                height: var(--ab-width);
+                cursor: pointer;
+                white-space: nowrap;
+                border: none;
+                background: none;
+                width: 100%;
+                text-align: left;
+                font-size: var(--ab-font-size);
+                padding: 0;
+                color: var(--ab-icon-color);
+                opacity: var(--ab-icon-opacity);
+            }
+            ICON {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: var(--ab-icon-size);
+                height: var(--ab-icon-size);
+                flex-shrink: 0;
+                overflow: hidden;
+            }
+            DOT {
+                position: absolute;
+                left: 2px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 4px;
+                height: 4px;
+                border-radius: 50%;
+            }
+            CAT_BORDER {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: var(--ab-cat-border-width);
+            }
+        })
+    }
+}
 
 /// Renders the activity bar for a single pane.
 ///

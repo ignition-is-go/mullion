@@ -5,6 +5,13 @@ use crate::context::MullionContext;
 use crate::theme::MullionTheme;
 use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
 
+/// Internal CSS variables for the activity bar — not exposed to consumers.
+#[derive(css_styled::CssVars)]
+struct ActivityBarInternal {
+    #[var("--ab-cat-color")]
+    pub category_color: String,
+}
+
 /// Style for the activity bar, powered by css-styled.
 ///
 /// All customizable values are CSS custom properties. Hover behavior and
@@ -14,6 +21,7 @@ use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
 #[component(scope = "mullion-ab")]
 #[component(theme = MullionTheme)]
 #[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border", icon = "mullion-ab-icon"))]
+#[component(internals(ActivityBarInternal))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
     #[prop(var = "--ab-width", default = "28px")]
@@ -42,8 +50,6 @@ pub struct ActivityBarStyle {
     pub icon_active_opacity: String,
     #[prop(var = "--ab-cat-border-width", default = "2px")]
     pub category_border_width: String,
-    #[prop(var = "--ab-cat-color", default = "transparent")]
-    pub category_color: String,
 }
 
 impl css_styled::StyledComponentBase for ActivityBarStyle {
@@ -263,7 +269,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                         <span class=ActivityBarStyle::ICON_SLOT>
                                             {if show_dot {
                                                 Some(view! {
-                                                    <span class=ActivityBarStyle::DOT style=ActivityBarStyle::vars(|v| v.category_color(&dot_color))></span>
+                                                    <span class=ActivityBarStyle::DOT style=ActivityBarInternal::vars(|v| v.category_color(&dot_color))></span>
                                                 })
                                             } else { None }}
                                             {render_icon(&cat_icon)}
@@ -273,7 +279,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                     {if is_expanded {
                                         Some(view! {
                                             <div style="position:relative">
-                                                <div class=ActivityBarStyle::CAT_BORDER style=ActivityBarStyle::vars(|v| v.category_color(&cat_color_for_border))></div>
+                                                <div class=ActivityBarStyle::CAT_BORDER style=ActivityBarInternal::vars(|v| v.category_color(&cat_color_for_border))></div>
                                                 {acts.into_iter().map(|(act_id, name, icon)| {
                                                     let is_active = current_active.as_ref() == Some(&act_id);
                                                     let active_style = if is_active {

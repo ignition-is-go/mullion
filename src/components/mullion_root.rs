@@ -19,16 +19,8 @@ use super::split_handle::SplitHandleStyle;
 #[component(theme = MullionTheme)]
 #[component(base_css)]
 pub struct MullionStyle {
-    #[prop(css = "background")]
+    #[prop(css = "background", default = theme.bg)]
     pub background: String,
-}
-
-impl Default for MullionStyle {
-    fn default() -> Self {
-        MullionStyle {
-            background: "var(--ml-bg)".into(),
-        }
-    }
 }
 
 impl css_styled::StyledComponentBase for MullionStyle {

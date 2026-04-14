@@ -10,19 +10,10 @@ use crate::tree::{PaneData, PaneNode, SplitDirection};
 #[component(theme = MullionTheme)]
 #[component(base_css)]
 pub struct PaneStyle {
-    #[prop(css = "background")]
+    #[prop(css = "background", default = theme.surface)]
     pub background: String,
-    #[prop(css = "color")]
+    #[prop(css = "color", default = theme.text)]
     pub color: String,
-}
-
-impl Default for PaneStyle {
-    fn default() -> Self {
-        PaneStyle {
-            background: "var(--ml-surface)".into(),
-            color: "var(--ml-text)".into(),
-        }
-    }
 }
 
 impl css_styled::StyledComponentBase for PaneStyle {

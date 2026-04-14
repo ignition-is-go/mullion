@@ -16,52 +16,32 @@ use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
 #[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border", icon = "mullion-ab-icon"))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
-    #[prop(var = "--ab-width")]
+    #[prop(var = "--ab-width", default = "28px")]
     pub width: String,
-    #[prop(var = "--ab-expanded-width")]
+    #[prop(var = "--ab-expanded-width", default = "150px")]
     pub expanded_width: String,
-    #[prop(var = "--ab-icon-size")]
+    #[prop(var = "--ab-icon-size", default = "14px")]
     pub icon_size: String,
-    #[prop(var = "--ab-background")]
+    #[prop(var = "--ab-background", default = theme.surface)]
     pub background: String,
-    #[prop(var = "--ab-border")]
+    #[prop(var = "--ab-border", default = "1px solid var(--ml-border)")]
     pub border: String,
-    #[prop(var = "--ab-border-radius")]
+    #[prop(var = "--ab-border-radius", default = "0")]
     pub border_radius: String,
-    #[prop(var = "--ab-expanded-padding")]
+    #[prop(var = "--ab-expanded-padding", default = "8px")]
     pub expanded_padding: String,
-    #[prop(var = "--ab-font-size")]
+    #[prop(var = "--ab-font-size", default = "11px")]
     pub font_size: String,
-    #[prop(var = "--ab-icon-color")]
+    #[prop(var = "--ab-icon-color", default = theme.text)]
     pub icon_color: String,
-    #[prop(var = "--ab-icon-stroke-color")]
+    #[prop(var = "--ab-icon-stroke-color", default = theme.text)]
     pub icon_stroke_color: String,
-    #[prop(var = "--ab-icon-opacity")]
+    #[prop(var = "--ab-icon-opacity", default = "0.5")]
     pub icon_opacity: String,
-    #[prop(var = "--ab-icon-active-opacity")]
+    #[prop(var = "--ab-icon-active-opacity", default = "1")]
     pub icon_active_opacity: String,
-    #[prop(var = "--ab-cat-border-width")]
+    #[prop(var = "--ab-cat-border-width", default = "2px")]
     pub category_border_width: String,
-}
-
-impl Default for ActivityBarStyle {
-    fn default() -> Self {
-        ActivityBarStyle {
-            width: "28px".into(),
-            expanded_width: "150px".into(),
-            icon_size: "14px".into(),
-            background: "var(--ml-surface)".into(),
-            border: "1px solid var(--ml-border)".into(),
-            border_radius: "0".into(),
-            expanded_padding: "8px".into(),
-            font_size: "11px".into(),
-            icon_color: "var(--ml-text)".into(),
-            icon_stroke_color: "var(--ml-text)".into(),
-            icon_opacity: "0.5".into(),
-            icon_active_opacity: "1".into(),
-            category_border_width: "2px".into(),
-        }
-    }
 }
 
 impl css_styled::StyledComponentBase for ActivityBarStyle {

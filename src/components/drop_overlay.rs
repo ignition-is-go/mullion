@@ -15,16 +15,8 @@ use crate::tree::{DropEdge, PaneData, PaneId};
 #[component(theme = MullionTheme)]
 #[component(base_css)]
 pub struct DropOverlayStyle {
-    #[prop(var = "--drop-indicator-color")]
+    #[prop(var = "--drop-indicator-color", default = theme.drop_indicator)]
     pub indicator_color: String,
-}
-
-impl Default for DropOverlayStyle {
-    fn default() -> Self {
-        DropOverlayStyle {
-            indicator_color: "var(--ml-drop-indicator)".into(),
-        }
-    }
 }
 
 impl css_styled::StyledComponentBase for DropOverlayStyle {

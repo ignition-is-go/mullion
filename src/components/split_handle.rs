@@ -20,25 +20,14 @@ use crate::tree::SplitDirection;
 #[component(modifier(horizontal, vertical))]
 #[component(base_css)]
 pub struct SplitHandleStyle {
-    #[prop(var = "--msh-thickness")]
+    #[prop(var = "--msh-thickness", default = "4px")]
     pub thickness: String,
-    #[prop(var = "--msh-target-thickness")]
+    #[prop(var = "--msh-target-thickness", default = "8px")]
     pub hover_target_thickness: String,
-    #[prop(var = "--msh-color")]
+    #[prop(var = "--msh-color", default = theme.border)]
     pub color: String,
-    #[prop(css = "background", on = bar, pseudo = ":hover")]
+    #[prop(css = "background", on = bar, pseudo = ":hover", default = theme.highlight)]
     pub hover_color: String,
-}
-
-impl Default for SplitHandleStyle {
-    fn default() -> Self {
-        SplitHandleStyle {
-            thickness: "4px".into(),
-            hover_target_thickness: "8px".into(),
-            color: "var(--ml-border)".into(),
-            hover_color: "var(--ml-highlight)".into(),
-        }
-    }
 }
 
 impl css_styled::StyledComponentBase for SplitHandleStyle {

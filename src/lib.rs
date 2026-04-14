@@ -8,7 +8,7 @@ pub mod workspace;
 
 pub use activity::{ActivityDef, ActivityIcon, Category};
 pub use components::mullion_root::{MullionPaneTree, MullionProvider, MullionRoot};
-pub use components::workspace_switcher::{WorkspaceSwitcher, WorkspaceSwitcherTheme};
+pub use components::workspace_switcher::{WorkspaceSwitcher, WorkspaceSwitcherStyle, WorkspaceSwitcherModifier};
 pub use context::MullionContext;
 pub use events::PaneEvent;
 pub use components::activity_bar::ActivityBarStyle;

@@ -12,6 +12,7 @@ use super::activity_bar::ActivityBarStyle;
 use super::drop_overlay::DropOverlayStyle;
 use super::pane_view::{PaneStyle, PaneView};
 use super::split_handle::SplitHandleStyle;
+use super::workspace_switcher::WorkspaceSwitcherStyle;
 
 /// Style for the mullion root container, powered by css-styled.
 #[derive(css_styled::StyledComponent, Clone, Debug)]
@@ -63,15 +64,17 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let split_handle_style = use_context::<SplitHandleStyle>().unwrap_or_default();
     let pane_style = use_context::<PaneStyle>().unwrap_or_default();
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
+    let ws_style = use_context::<WorkspaceSwitcherStyle>().unwrap_or_default();
 
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
         theme.to_theme_css(),
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
         activity_bar_style.to_css(),
         drop_overlay_style.to_css(),
+        ws_style.to_css(),
     );
 
     let ctx = MullionContext::new(
@@ -126,15 +129,17 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let split_handle_style = use_context::<SplitHandleStyle>().unwrap_or_default();
     let pane_style = use_context::<PaneStyle>().unwrap_or_default();
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
+    let ws_style = use_context::<WorkspaceSwitcherStyle>().unwrap_or_default();
 
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
         theme.to_theme_css(),
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
         activity_bar_style.to_css(),
         drop_overlay_style.to_css(),
+        ws_style.to_css(),
     );
 
     let ctx = MullionContext::new(

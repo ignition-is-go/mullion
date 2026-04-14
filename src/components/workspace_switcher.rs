@@ -1,34 +1,57 @@
 use leptos::prelude::*;
 
 use crate::context::MullionContext;
+use crate::theme::MullionTheme;
 use crate::tree::PaneData;
 use crate::workspace::WorkspaceManager;
 
-/// Theme for the workspace switcher component.
-#[derive(Clone, Debug)]
-pub struct WorkspaceSwitcherTheme {
+/// Style for the workspace switcher component.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "mullion-ws")]
+#[component(theme = MullionTheme)]
+#[component(class(btn = "mullion-ws-btn"))]
+#[component(modifier(active))]
+#[component(base_css)]
+pub struct WorkspaceSwitcherStyle {
+    #[prop(var = "--ws-btn-bg", default = theme.accent)]
     pub button_background: String,
+    #[prop(var = "--ws-btn-color", default = theme.text_muted)]
     pub button_color: String,
+    #[prop(var = "--ws-btn-active-bg", default = theme.highlight)]
     pub button_active_background: String,
+    #[prop(var = "--ws-btn-active-color", default = theme.text)]
     pub button_active_color: String,
+    #[prop(var = "--ws-gap", default = "4px")]
     pub gap: String,
+    #[prop(var = "--ws-font-size", default = "12px")]
     pub font_size: String,
+    #[prop(var = "--ws-padding", default = "4px 12px")]
     pub padding: String,
+    #[prop(var = "--ws-border-radius", default = "3px")]
     pub border_radius: String,
 }
 
-impl Default for WorkspaceSwitcherTheme {
-    fn default() -> Self {
-        WorkspaceSwitcherTheme {
-            button_background: "#3c3c3c".into(),
-            button_color: "#ccc".into(),
-            button_active_background: "#007acc".into(),
-            button_active_color: "#fff".into(),
-            gap: "4px".into(),
-            font_size: "12px".into(),
-            padding: "4px 12px".into(),
-            border_radius: "3px".into(),
-        }
+impl css_styled::StyledComponentBase for WorkspaceSwitcherStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(WorkspaceSwitcherStyle, {
+            SCOPE {
+                display: flex;
+                gap: var(--ws-gap);
+            }
+            BTN {
+                border: none;
+                padding: var(--ws-padding);
+                border-radius: var(--ws-border-radius);
+                font-size: var(--ws-font-size);
+                cursor: pointer;
+                background: var(--ws-btn-bg);
+                color: var(--ws-btn-color);
+            }
+            BTN.ACTIVE {
+                background: var(--ws-btn-active-bg);
+                color: var(--ws-btn-active-color);
+            }
+        })
     }
 }
 
@@ -38,15 +61,11 @@ pub fn WorkspaceSwitcher<D: PaneData + Send + Sync>(
     manager: WorkspaceManager<D>,
     ctx: MullionContext<D>,
 ) -> impl IntoView {
-    let theme = use_context::<WorkspaceSwitcherTheme>().unwrap_or_default();
-
-    let container_style = format!("display:flex;gap:{}", theme.gap);
-
     let workspaces = manager.workspaces_signal();
     let active = manager.active_signal();
 
     view! {
-        <div style={container_style}>
+        <div class=WorkspaceSwitcherStyle::SCOPE>
             {move || {
                 let ws_list = workspaces.get();
                 let current = active.get();
@@ -54,12 +73,11 @@ pub fn WorkspaceSwitcher<D: PaneData + Send + Sync>(
                 ws_list.into_iter().map(|ws| {
                     let ws_id = ws.id.clone();
                     let is_active = ws_id == current;
-                    let bg = if is_active { theme.button_active_background.clone() } else { theme.button_background.clone() };
-                    let color = if is_active { theme.button_active_color.clone() } else { theme.button_color.clone() };
-                    let style = format!(
-                        "background:{};color:{};border:none;padding:{};border-radius:{};font-size:{};cursor:pointer",
-                        bg, color, theme.padding, theme.border_radius, theme.font_size
-                    );
+                    let class = if is_active {
+                        WorkspaceSwitcherStyle::class(&[WorkspaceSwitcherModifier::Active])
+                    } else {
+                        WorkspaceSwitcherStyle::BTN.to_string()
+                    };
 
                     let manager = manager.clone();
                     let ctx = ctx.clone();
@@ -67,7 +85,7 @@ pub fn WorkspaceSwitcher<D: PaneData + Send + Sync>(
 
                     view! {
                         <button
-                            style={style}
+                            class=class
                             on:click=move |_| {
                                 if let Some(tree) = manager.switch_to(&ws_id_click) {
                                     ctx.set_tree(tree);

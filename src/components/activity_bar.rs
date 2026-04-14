@@ -61,17 +61,10 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         }
     });
 
-    let icon_size = style.icon_size.clone();
-    let icon_color = style.icon_color.clone();
     let icon_stroke_color = style.icon_stroke_color.clone();
-    let icon_opacity = style.icon_opacity.clone();
     let icon_active_opacity = style.icon_active_opacity.clone();
-    let border_width = style.category_border_width.clone();
-    let action_icon_opacity = icon_opacity.clone();
 
     let ctx_actions = ctx.clone();
-
-    let icon_s = format!("display:flex;width:{s};height:{s};flex-shrink:0;overflow:hidden", s = icon_size);
 
     view! {
         <div class=ActivityBarStyle::SCOPE>
@@ -97,7 +90,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                      ctx_dragend.dragging_pane.set(None);
                                  }>
                                 <span class=ActivityBarStyle::ICON_SLOT>
-                                    {render_icon(&icon, &icon_size, &icon_color, &icon_stroke_color)}
+                                    {render_icon(&icon, &icon_stroke_color)}
                                 </span>
                                 <span class=ActivityBarStyle::LABEL style="font-weight:600;font-size:12px"></span>
                             </div>
@@ -114,7 +107,12 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                         groups.into_iter().map(|(cat_id, cat_name, cat_icon, cat_color, acts)| {
                             let is_expanded = current_expanded.as_ref() == Some(&cat_id);
                             let has_active = acts.iter().any(|(id, _, _)| current_active.as_ref() == Some(id));
-                            let cat_opacity = if is_expanded || has_active { icon_active_opacity.clone() } else { icon_opacity.clone() };
+                            let cat_active = is_expanded || has_active;
+                            let cat_style = if cat_active {
+                                format!("opacity:{};position:relative", icon_active_opacity)
+                            } else {
+                                "position:relative".to_string()
+                            };
                             let show_dot = !is_expanded && has_active;
                             let dot_color = cat_color.clone();
                             let cat_color_for_border = cat_color.clone();
@@ -123,7 +121,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                             view! {
                                 <div>
                                     <button class=ActivityBarStyle::BTN
-                                            style=format!("opacity:{};position:relative", cat_opacity)
+                                            style=cat_style
                                             on:click=move |_| {
                                         if is_expanded { set_expanded_cat.set(None); }
                                         else { set_expanded_cat.set(Some(cat_id_click.clone())); }
@@ -134,30 +132,33 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                                     <span class=ActivityBarStyle::DOT style=format!("background:{}", dot_color)></span>
                                                 })
                                             } else { None }}
-                                            {render_icon(&cat_icon, &icon_size, &icon_color, &icon_stroke_color)}
+                                            {render_icon(&cat_icon, &icon_stroke_color)}
                                         </span>
                                         <span class=ActivityBarStyle::LABEL>{cat_name.clone()}</span>
                                     </button>
                                     {if is_expanded {
                                         Some(view! {
                                             <div style="position:relative">
-                                                <div class=ActivityBarStyle::CAT_BORDER style=format!("width:{};background:{}", border_width, cat_color_for_border)></div>
+                                                <div class=ActivityBarStyle::CAT_BORDER style=format!("background:{}", cat_color_for_border)></div>
                                                 {acts.into_iter().map(|(act_id, name, icon)| {
                                                     let is_active = current_active.as_ref() == Some(&act_id);
-                                                    let opacity = if is_active { icon_active_opacity.clone() } else { icon_opacity.clone() };
-                                                    let act_color = if is_active { cat_color_for_border.clone() } else { icon_color.clone() };
+                                                    let active_style = if is_active {
+                                                        format!("opacity:{};color:{}", icon_active_opacity, cat_color_for_border)
+                                                    } else {
+                                                        String::new()
+                                                    };
                                                     let act_stroke = if is_active { cat_color_for_border.clone() } else { icon_stroke_color.clone() };
                                                     let ctx = ctx.clone();
                                                     let pid = pane_id.clone();
                                                     let label = name.clone();
                                                     view! {
                                                         <button class=ActivityBarStyle::BTN
-                                                                style=format!("opacity:{};color:{}", opacity, act_color)
+                                                                style=active_style
                                                                 on:click=move |_| {
                                                             ctx.set_active_activity(&pid, Some(act_id.clone()));
                                                         }>
                                                             <span class=ActivityBarStyle::ICON_SLOT>
-                                                                {render_icon(&icon, &icon_size, &act_color, &act_stroke)}
+                                                                {render_icon(&icon, &act_stroke)}
                                                             </span>
                                                             <span class=ActivityBarStyle::LABEL>{label.clone()}</span>
                                                         </button>
@@ -174,38 +175,31 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                 // Pane actions (bottom)
                 <div>
                     {
-                        let is1 = icon_s.clone();
-                        let is2 = icon_s.clone();
-                        let is3 = icon_s;
                         let ctx_sh = ctx_actions.clone();
                         let ctx_sv = ctx_actions.clone();
                         let ctx_cl = ctx_actions.clone();
                         let pid_sh = pane_id.clone();
                         let pid_sv = pane_id.clone();
                         let pid_cl = pane_id.clone();
-                        let action_opacity = format!("opacity:{}", action_icon_opacity);
-                        let ao1 = action_opacity.clone();
-                        let ao2 = action_opacity.clone();
-                        let ao3 = action_opacity;
                         view! {
-                            <button class=ActivityBarStyle::BTN style={ao1} on:click=move |_| {
+                            <button class=ActivityBarStyle::BTN on:click=move |_| {
                                 let d = data.get();
                                 let new_id = PaneId::new(format!("{:.0}", web_sys::js_sys::Math::random() * 1e12));
                                 ctx_sh.split_pane(&pid_sh, SplitDirection::Horizontal, new_id, d);
                             }>
-                                <span class=ActivityBarStyle::ICON_SLOT><span inner_html=ICON_SPLIT_H style={is1}></span></span>
+                                <span class=ActivityBarStyle::ICON_SLOT><span class=ActivityBarStyle::ICON inner_html=ICON_SPLIT_H></span></span>
                                 <span class=ActivityBarStyle::LABEL>"Split H"</span>
                             </button>
-                            <button class=ActivityBarStyle::BTN style={ao2} on:click=move |_| {
+                            <button class=ActivityBarStyle::BTN on:click=move |_| {
                                 let d = data.get();
                                 let new_id = PaneId::new(format!("{:.0}", web_sys::js_sys::Math::random() * 1e12));
                                 ctx_sv.split_pane(&pid_sv, SplitDirection::Vertical, new_id, d);
                             }>
-                                <span class=ActivityBarStyle::ICON_SLOT><span inner_html=ICON_SPLIT_V style={is2}></span></span>
+                                <span class=ActivityBarStyle::ICON_SLOT><span class=ActivityBarStyle::ICON inner_html=ICON_SPLIT_V></span></span>
                                 <span class=ActivityBarStyle::LABEL>"Split V"</span>
                             </button>
-                            <button class=ActivityBarStyle::BTN style={ao3} on:click=move |_| { ctx_cl.close_pane(&pid_cl); }>
-                                <span class=ActivityBarStyle::ICON_SLOT><span inner_html=ICON_CLOSE style={is3}></span></span>
+                            <button class=ActivityBarStyle::BTN on:click=move |_| { ctx_cl.close_pane(&pid_cl); }>
+                                <span class=ActivityBarStyle::ICON_SLOT><span class=ActivityBarStyle::ICON inner_html=ICON_CLOSE></span></span>
                                 <span class=ActivityBarStyle::LABEL>"Close"</span>
                             </button>
                         }
@@ -216,18 +210,15 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     }
 }
 
-fn render_icon(icon: &ActivityIcon, size: &str, fill_color: &str, stroke_color: &str) -> AnyView {
-    let style = format!(
-        "display:flex;align-items:center;justify-content:center;width:{};height:{};flex-shrink:0;overflow:hidden;color:{}",
-        size, size, fill_color
-    );
+fn render_icon(icon: &ActivityIcon, stroke_color: &str) -> AnyView {
+    let icon_class = ActivityBarStyle::ICON;
     match icon {
-        ActivityIcon::Class(class) => view! { <span class={class.clone()} style={style}></span> }.into_any(),
+        ActivityIcon::Class(class) => view! { <span class=format!("{} {}", icon_class, class)></span> }.into_any(),
         ActivityIcon::Svg(svg) => {
             let normalized = normalize_svg(svg, stroke_color);
-            view! { <span inner_html={normalized} style={style}></span> }.into_any()
+            view! { <span class=icon_class inner_html={normalized}></span> }.into_any()
         }
-        ActivityIcon::Url(url) => view! { <img src={url.clone()} style={format!("{};object-fit:contain", style)} /> }.into_any(),
+        ActivityIcon::Url(url) => view! { <img class=icon_class src={url.clone()} style="object-fit:contain" /> }.into_any(),
     }
 }
 

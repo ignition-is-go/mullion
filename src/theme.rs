@@ -5,7 +5,7 @@
 /// via inline styles since it varies per-button at runtime.
 #[derive(css_styled::StyledComponent, Clone, Debug)]
 #[component(scope = "mullion-ab")]
-#[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border"))]
+#[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border", icon = "mullion-ab-icon"))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
     #[prop(var = "--ab-width")]
@@ -68,14 +68,16 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
 .{label} {{ display: none; overflow: hidden; text-overflow: ellipsis; }}\n\
 .{scope}:hover .{label} {{ display: inline; }}\n\
 .{icon_slot} {{ width: var(--ab-width); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }}\n\
-.{btn} {{ display: flex; align-items: center; height: var(--ab-width); cursor: pointer; white-space: nowrap; border: none; background: none; width: 100%; text-align: left; font-size: var(--ab-font-size); padding: 0; color: var(--ab-icon-color); }}\n\
+.{btn} {{ display: flex; align-items: center; height: var(--ab-width); cursor: pointer; white-space: nowrap; border: none; background: none; width: 100%; text-align: left; font-size: var(--ab-font-size); padding: 0; color: var(--ab-icon-color); opacity: var(--ab-icon-opacity); }}\n\
+.{icon} {{ display: flex; align-items: center; justify-content: center; width: var(--ab-icon-size); height: var(--ab-icon-size); flex-shrink: 0; overflow: hidden; }}\n\
 .{dot} {{ position: absolute; left: 2px; top: 50%; transform: translateY(-50%); width: 4px; height: 4px; border-radius: 50%; }}\n\
-.{cat_border} {{ position: absolute; left: 0; top: 0; bottom: 0; }}",
+.{cat_border} {{ position: absolute; left: 0; top: 0; bottom: 0; width: var(--ab-cat-border-width); }}",
             scope = Self::SCOPE,
             panel = Self::PANEL,
             label = Self::LABEL,
             icon_slot = Self::ICON_SLOT,
             btn = Self::BTN,
+            icon = Self::ICON,
             dot = Self::DOT,
             cat_border = Self::CAT_BORDER,
         )).as_str()

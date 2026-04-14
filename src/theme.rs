@@ -49,28 +49,67 @@ impl Default for ActivityBarTheme {
     }
 }
 
-/// Theme for split handles.
-#[derive(Clone, Debug)]
-pub struct SplitHandleTheme {
-    /// Thickness of the visible handle (e.g. "2px").
+/// Style for split handles, powered by css-styled.
+///
+/// Generates scoped CSS with typed class names, CSS custom properties,
+/// and spec-validated base CSS.
+#[derive(css_styled::StyledComponent, Clone, Debug)]
+#[component(scope = "msh")]
+#[component(class(bar = "msh-bar"))]
+#[component(modifier(horizontal, vertical))]
+#[component(base_css)]
+pub struct SplitHandleStyle {
+    #[prop(var = "--msh-thickness")]
     pub thickness: String,
-    /// Thickness of the hover/drag target area (e.g. "8px").
-    /// This can be larger than `thickness` to make the handle easier to grab.
+    #[prop(var = "--msh-target-thickness")]
     pub hover_target_thickness: String,
-    /// Handle color.
+    #[prop(var = "--msh-color")]
     pub color: String,
-    /// Handle color on hover.
+    #[prop(css = "background", on = bar, pseudo = ":hover")]
     pub hover_color: String,
 }
 
-impl Default for SplitHandleTheme {
+impl Default for SplitHandleStyle {
     fn default() -> Self {
-        SplitHandleTheme {
+        SplitHandleStyle {
             thickness: "4px".into(),
             hover_target_thickness: "8px".into(),
             color: "transparent".into(),
             hover_color: "#007acc".into(),
         }
+    }
+}
+
+impl css_styled::StyledComponentBase for SplitHandleStyle {
+    fn base_css() -> &'static str {
+        css_styled::css!(SplitHandleStyle, {
+            SCOPE {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            SCOPE.HORIZONTAL {
+                cursor: col-resize;
+                width: var(--msh-target-thickness);
+            }
+            SCOPE.VERTICAL {
+                cursor: row-resize;
+                height: var(--msh-target-thickness);
+            }
+            BAR {
+                background: var(--msh-color);
+                pointer-events: none;
+            }
+            SCOPE.HORIZONTAL BAR {
+                width: var(--msh-thickness);
+                height: 100%;
+            }
+            SCOPE.VERTICAL BAR {
+                height: var(--msh-thickness);
+                width: 100%;
+            }
+        })
     }
 }
 

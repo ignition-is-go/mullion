@@ -6,55 +6,23 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::MouseEvent;
 
-use crate::theme::SplitHandleTheme;
+use crate::theme::{SplitHandleModifier, SplitHandleStyle};
 use crate::tree::SplitDirection;
-
-/// CSS class for the split handle hover/drag target area.
-pub const CLASS_SPLIT_TARGET: &str = "msh-target";
-/// CSS class for the visible split handle bar.
-pub const CLASS_SPLIT_BAR: &str = "msh-bar";
 
 /// A draggable handle between two split panes for resizing.
 ///
 /// Renders a wider invisible hover target with a narrower visible separator
-/// centered inside it. The hover target thickness and visible thickness are
-/// independently configurable via `SplitHandleTheme`.
-///
-/// Hover styles are injected once at the root level (`MullionRoot` /
-/// `MullionProvider` / `MullionPaneTree`), not per-instance.
+/// centered inside it. All styling is driven by `SplitHandleStyle` via
+/// css-styled scoped CSS classes and custom properties.
 #[component]
 pub fn SplitHandle(
     direction: SplitDirection,
     on_resize: Callback<f64>,
-    #[prop(optional)]
-    theme: Option<SplitHandleTheme>,
 ) -> impl IntoView {
-    let theme = theme.unwrap_or_default();
-
-    let cursor = match direction {
-        SplitDirection::Horizontal => "col-resize",
-        SplitDirection::Vertical => "row-resize",
+    let modifier = match direction {
+        SplitDirection::Horizontal => SplitHandleModifier::Horizontal,
+        SplitDirection::Vertical => SplitHandleModifier::Vertical,
     };
-
-    let (target_dim, bar_dim) = match direction {
-        SplitDirection::Horizontal => (
-            format!("width:{t};min-width:{t}", t = theme.hover_target_thickness),
-            format!("width:{t};height:100%", t = theme.thickness),
-        ),
-        SplitDirection::Vertical => (
-            format!("height:{t};min-height:{t}", t = theme.hover_target_thickness),
-            format!("height:{t};width:100%", t = theme.thickness),
-        ),
-    };
-
-    let target_style = format!(
-        "{target_dim};cursor:{cursor};display:flex;align-items:center;justify-content:center;flex-shrink:0"
-    );
-
-    let bar_style = format!(
-        "{bar_dim};background:{c};transition:background 0.1s ease;pointer-events:none",
-        c = theme.color,
-    );
 
     let on_mousedown = move |ev: MouseEvent| {
         ev.prevent_default();
@@ -143,11 +111,10 @@ pub fn SplitHandle(
 
     view! {
         <div
-            class=CLASS_SPLIT_TARGET
-            style={target_style}
+            class=SplitHandleStyle::class(&[modifier])
             on:mousedown=on_mousedown
         >
-            <div class=CLASS_SPLIT_BAR style={bar_style} />
+            <div class=SplitHandleStyle::BAR />
         </div>
     }
 }

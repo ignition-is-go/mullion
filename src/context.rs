@@ -6,7 +6,7 @@ use send_wrapper::SendWrapper;
 
 use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarTheme, DropOverlayTheme, MullionTheme, PaneTheme, SplitHandleTheme};
+use crate::theme::{ActivityBarTheme, DropOverlayTheme, MullionTheme, PaneTheme, SplitHandleStyle};
 use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
 
 /// The reactive store for the mullion pane system.
@@ -30,7 +30,7 @@ pub struct MullionContext<D: PaneData> {
     /// Resolved themes (captured at provider time so they work in reactive closures).
     pub mullion_theme: MullionTheme,
     pub activity_bar_theme: ActivityBarTheme,
-    pub split_handle_theme: SplitHandleTheme,
+    pub split_handle_style: SplitHandleStyle,
     pub pane_theme: PaneTheme,
     pub drop_overlay_theme: DropOverlayTheme,
     /// Optional app icon displayed at the top of every activity bar.
@@ -46,7 +46,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         event_handler: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
         mullion_theme: MullionTheme,
         activity_bar_theme: ActivityBarTheme,
-        split_handle_theme: SplitHandleTheme,
+        split_handle_style: SplitHandleStyle,
         pane_theme: PaneTheme,
         drop_overlay_theme: DropOverlayTheme,
         app_icon: Option<ActivityIcon>,
@@ -82,7 +82,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             dragging_pane: RwSignal::new(None),
             mullion_theme,
             activity_bar_theme,
-            split_handle_theme,
+            split_handle_style,
             pane_theme,
             drop_overlay_theme,
             app_icon,

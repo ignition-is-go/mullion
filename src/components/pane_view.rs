@@ -102,11 +102,9 @@ pub fn PaneView<D: PaneData + Send + Sync>(
                     </div>
                     {first_leaf_id.map(|leaf_id| {
                         let ctx = ctx.clone();
-                        let handle_theme = ctx.split_handle_theme.clone();
                         view! {
                             <SplitHandle
                                 direction=direction
-                                theme=handle_theme
                                 on_resize=Callback::new(move |ratio: f64| {
                                     ctx.resize_pane(&leaf_id, ratio);
                                 })

@@ -220,7 +220,7 @@ fn App() -> impl IntoView {
         icon_active_opacity: "1".into(),
         category_border_width: "2px".into(),
     });
-    provide_context(SplitHandleTheme {
+    provide_context(SplitHandleStyle {
         thickness: "2px".into(),
         hover_target_thickness: "8px".into(),
         color: "#1a1a1a".into(),

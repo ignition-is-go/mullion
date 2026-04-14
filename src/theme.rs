@@ -1,3 +1,50 @@
+/// Global color theme for mullion components.
+///
+/// Defines CSS custom properties on `:root` that all component styles
+/// can reference via `var(--ml-*)`.
+#[derive(css_styled::Theme, Clone, Debug)]
+pub struct MullionTheme {
+    /// Root/page background (darkest).
+    #[var("--ml-bg")]
+    pub bg: String,
+    /// Surface background (panels, panes, activity bar).
+    #[var("--ml-surface")]
+    pub surface: String,
+    /// Border/separator color.
+    #[var("--ml-border")]
+    pub border: String,
+    /// Subtle accent (active tabs, hover backgrounds).
+    #[var("--ml-accent")]
+    pub accent: String,
+    /// Primary text color.
+    #[var("--ml-text")]
+    pub text: String,
+    /// Muted/secondary text color.
+    #[var("--ml-text-muted")]
+    pub text_muted: String,
+    /// Highlight color for interactive elements (hover, focus).
+    #[var("--ml-highlight")]
+    pub highlight: String,
+    /// Drop overlay indicator color.
+    #[var("--ml-drop-indicator")]
+    pub drop_indicator: String,
+}
+
+impl Default for MullionTheme {
+    fn default() -> Self {
+        MullionTheme {
+            bg: "#0e0e0e".into(),
+            surface: "#111111".into(),
+            border: "#1a1a1a".into(),
+            accent: "#222222".into(),
+            highlight: "#333333".into(),
+            text: "#eeeeee".into(),
+            text_muted: "#888888".into(),
+            drop_indicator: "rgba(255,255,255,0.06)".into(),
+        }
+    }
+}
+
 /// Style for the activity bar, powered by css-styled.
 ///
 /// All customizable values are CSS custom properties. Hover behavior and
@@ -5,6 +52,7 @@
 /// via inline styles since it varies per-button at runtime.
 #[derive(css_styled::StyledComponent, Clone, Debug)]
 #[component(scope = "mullion-ab")]
+#[component(theme = MullionTheme)]
 #[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border", icon = "mullion-ab-icon"))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
@@ -42,13 +90,13 @@ impl Default for ActivityBarStyle {
             width: "28px".into(),
             expanded_width: "150px".into(),
             icon_size: "14px".into(),
-            background: "transparent".into(),
-            border: "none".into(),
+            background: "var(--ml-surface)".into(),
+            border: "1px solid var(--ml-border)".into(),
             border_radius: "0".into(),
             expanded_padding: "8px".into(),
             font_size: "11px".into(),
-            icon_color: "currentColor".into(),
-            icon_stroke_color: "currentColor".into(),
+            icon_color: "var(--ml-text)".into(),
+            icon_stroke_color: "var(--ml-text)".into(),
             icon_opacity: "0.5".into(),
             icon_active_opacity: "1".into(),
             category_border_width: "2px".into(),
@@ -90,6 +138,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
 /// and spec-validated base CSS.
 #[derive(css_styled::StyledComponent, Clone, Debug)]
 #[component(scope = "msh")]
+#[component(theme = MullionTheme)]
 #[component(class(bar = "msh-bar"))]
 #[component(modifier(horizontal, vertical))]
 #[component(base_css)]
@@ -109,8 +158,8 @@ impl Default for SplitHandleStyle {
         SplitHandleStyle {
             thickness: "4px".into(),
             hover_target_thickness: "8px".into(),
-            color: "transparent".into(),
-            hover_color: "#007acc".into(),
+            color: "var(--ml-border)".into(),
+            hover_color: "var(--ml-highlight)".into(),
         }
     }
 }
@@ -151,6 +200,7 @@ impl css_styled::StyledComponentBase for SplitHandleStyle {
 /// Style for leaf panes, powered by css-styled.
 #[derive(css_styled::StyledComponent, Clone, Debug)]
 #[component(scope = "mullion-pane")]
+#[component(theme = MullionTheme)]
 #[component(base_css)]
 pub struct PaneStyle {
     #[prop(css = "background")]
@@ -162,8 +212,8 @@ pub struct PaneStyle {
 impl Default for PaneStyle {
     fn default() -> Self {
         PaneStyle {
-            background: "transparent".into(),
-            color: "inherit".into(),
+            background: "var(--ml-surface)".into(),
+            color: "var(--ml-text)".into(),
         }
     }
 }
@@ -189,6 +239,7 @@ impl css_styled::StyledComponentBase for PaneStyle {
 /// as inline styles since it is driven by runtime drag state.
 #[derive(css_styled::StyledComponent, Clone, Debug)]
 #[component(scope = "mullion-drop")]
+#[component(theme = MullionTheme)]
 #[component(base_css)]
 pub struct DropOverlayStyle {
     #[prop(var = "--drop-indicator-color")]
@@ -198,7 +249,7 @@ pub struct DropOverlayStyle {
 impl Default for DropOverlayStyle {
     fn default() -> Self {
         DropOverlayStyle {
-            indicator_color: "rgba(0,122,204,0.3)".into(),
+            indicator_color: "var(--ml-drop-indicator)".into(),
         }
     }
 }
@@ -218,6 +269,7 @@ impl css_styled::StyledComponentBase for DropOverlayStyle {
 /// Style for the mullion root container, powered by css-styled.
 #[derive(css_styled::StyledComponent, Clone, Debug)]
 #[component(scope = "mullion-root")]
+#[component(theme = MullionTheme)]
 #[component(base_css)]
 pub struct MullionStyle {
     #[prop(css = "background")]
@@ -227,7 +279,7 @@ pub struct MullionStyle {
 impl Default for MullionStyle {
     fn default() -> Self {
         MullionStyle {
-            background: "transparent".into(),
+            background: "var(--ml-bg)".into(),
         }
     }
 }

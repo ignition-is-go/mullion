@@ -1,11 +1,11 @@
 use leptos::prelude::*;
 
-use css_styled::IntoCss;
+use css_styled::{IntoCss, IntoThemeCss};
 
 use crate::activity::Category;
 use crate::context::MullionContext;
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarStyle, DropOverlayStyle, MullionStyle, PaneStyle, SplitHandleStyle};
+use crate::theme::{ActivityBarStyle, DropOverlayStyle, MullionStyle, MullionTheme, PaneStyle, SplitHandleStyle};
 use crate::tree::{PaneData, PaneNode};
 
 use super::pane_view::PaneView;
@@ -33,6 +33,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     app_icon: Option<crate::activity::ActivityIcon>,
     children: Children,
 ) -> impl IntoView {
+    let theme = use_context::<MullionTheme>().unwrap_or_default();
     let mullion_style = use_context::<MullionStyle>().unwrap_or_default();
     let activity_bar_style = use_context::<ActivityBarStyle>().unwrap_or_default();
     let split_handle_style = use_context::<SplitHandleStyle>().unwrap_or_default();
@@ -40,7 +41,8 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
 
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}",
+        theme.to_theme_css(),
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
@@ -52,6 +54,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         initial_tree,
         categories,
         on_event,
+        theme,
         mullion_style,
         activity_bar_style,
         split_handle_style,
@@ -93,6 +96,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     #[prop(optional)]
     app_icon: Option<crate::activity::ActivityIcon>,
 ) -> impl IntoView {
+    let theme = use_context::<MullionTheme>().unwrap_or_default();
     let mullion_style = use_context::<MullionStyle>().unwrap_or_default();
     let activity_bar_style = use_context::<ActivityBarStyle>().unwrap_or_default();
     let split_handle_style = use_context::<SplitHandleStyle>().unwrap_or_default();
@@ -100,7 +104,8 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
 
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}",
+        theme.to_theme_css(),
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
@@ -112,6 +117,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         initial_tree,
         categories,
         on_event,
+        theme,
         mullion_style,
         activity_bar_style,
         split_handle_style,
@@ -150,7 +156,8 @@ pub fn MullionPaneTree<D: PaneData + Send + Sync>(
     ctx: MullionContext<D>,
 ) -> impl IntoView {
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}",
+        ctx.theme.to_theme_css(),
         ctx.split_handle_style.to_css(),
         ctx.pane_style.to_css(),
         ctx.mullion_style.to_css(),

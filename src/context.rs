@@ -6,7 +6,7 @@ use send_wrapper::SendWrapper;
 
 use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
-use crate::theme::{ActivityBarStyle, DropOverlayStyle, MullionStyle, PaneStyle, SplitHandleStyle};
+use crate::theme::{ActivityBarStyle, DropOverlayStyle, MullionStyle, MullionTheme, PaneStyle, SplitHandleStyle};
 use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
 
 /// The reactive store for the mullion pane system.
@@ -27,6 +27,8 @@ pub struct MullionContext<D: PaneData> {
     pub focused_pane: RwSignal<Option<PaneId>>,
     /// Pane currently being dragged (for move operations).
     pub dragging_pane: RwSignal<Option<PaneId>>,
+    /// Global color theme.
+    pub theme: MullionTheme,
     /// Resolved themes (captured at provider time so they work in reactive closures).
     pub mullion_style: MullionStyle,
     pub activity_bar_style: ActivityBarStyle,
@@ -44,6 +46,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         initial_tree: PaneNode<D>,
         categories: Vec<Category<D>>,
         event_handler: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
+        theme: MullionTheme,
         mullion_style: MullionStyle,
         activity_bar_style: ActivityBarStyle,
         split_handle_style: SplitHandleStyle,
@@ -80,6 +83,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             event_tx: StoredValue::new(Box::new(event_handler)),
             focused_pane: RwSignal::new(None),
             dragging_pane: RwSignal::new(None),
+            theme,
             mullion_style,
             activity_bar_style,
             split_handle_style,

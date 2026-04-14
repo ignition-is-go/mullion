@@ -205,37 +205,28 @@ fn App() -> impl IntoView {
     ];
     let workspace_mgr = WorkspaceManager::new(workspaces, WorkspaceId("default".into()));
 
+    // Theme defines the color palette
+    provide_context(MullionTheme {
+        bg: "#0e0e0e".into(),
+        surface: "#111111".into(),
+        border: "#1a1a1a".into(),
+        accent: "#222222".into(),
+        highlight: "#333333".into(),
+        text: "#eeeeee".into(),
+        text_muted: "#888888".into(),
+        drop_indicator: "rgba(255,255,255,0.06)".into(),
+    });
+
+    // Styles only override non-color values (or omit for defaults)
     provide_context(ActivityBarStyle {
-        width: "28px".into(),
-        expanded_width: "150px".into(),
-        icon_size: "14px".into(),
-        background: "#111111".into(),
-        border: "1px solid #222".into(),
-        border_radius: "0".into(),
-        expanded_padding: "10px".into(),
-        font_size: "11px".into(),
-        icon_color: "#eee".into(),
-        icon_stroke_color: "#eee".into(),
         icon_opacity: "1".into(),
         icon_active_opacity: "1".into(),
-        category_border_width: "2px".into(),
+        expanded_padding: "10px".into(),
+        ..Default::default()
     });
     provide_context(SplitHandleStyle {
         thickness: "2px".into(),
-        hover_target_thickness: "8px".into(),
-        color: "#1a1a1a".into(),
-        hover_color: "#333".into(),
-    });
-    provide_context(PaneStyle {
-        background: "#111111".into(),
-        color: "#eee".into(),
-    });
-    provide_context(MullionStyle {
-        background: "#0e0e0e".into(),
-    });
-
-    provide_context(DropOverlayStyle {
-        indicator_color: "rgba(255,255,255,0.06)".into(),
+        ..Default::default()
     });
 
     let on_event = move |event: PaneEvent<DemoData>| {

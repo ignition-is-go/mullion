@@ -21,13 +21,13 @@ pub struct DropOverlayStyle {
 
 impl css_styled::StyledComponentBase for DropOverlayStyle {
     fn base_css() -> &'static str {
-        css_styled::css!(DropOverlayStyle, r#"
-            .{SCOPE} {
+        css_styled::css!(DropOverlayStyle, {
+            SCOPE {
                 position: absolute;
                 pointer-events: none;
                 background: var(--drop-indicator-color);
             }
-        "#)
+        })
     }
 }
 

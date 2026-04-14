@@ -20,26 +20,26 @@ struct DemoLayoutStyle {
 
 impl StyledComponentBase for DemoLayoutStyle {
     fn base_css() -> &'static str {
-        css!(DemoLayoutStyle, r#"
-            .{SCOPE} {
+        css!(DemoLayoutStyle, {
+            SCOPE {
                 display: flex;
                 flex-direction: column;
                 width: 100vw;
                 height: 100vh;
             }
-            .{CONTENT} {
+            CONTENT {
                 flex: 1;
                 min-height: 0;
                 overflow: hidden;
             }
-            .{FOOTER} {
+            FOOTER {
                 display: flex;
                 gap: 1px;
                 background: var(--demo-footer-bg);
                 padding: 2px 4px;
                 border-top: var(--demo-footer-border);
             }
-        "#)
+        })
     }
 }
 
@@ -61,8 +61,8 @@ struct FooterTabStyle {
 
 impl StyledComponentBase for FooterTabStyle {
     fn base_css() -> &'static str {
-        css!(FooterTabStyle, r#"
-            .{SCOPE} {
+        css!(FooterTabStyle, {
+            SCOPE {
                 background: var(--tab-bg);
                 color: var(--tab-color);
                 border: none;
@@ -72,11 +72,11 @@ impl StyledComponentBase for FooterTabStyle {
                 border-radius: 2px;
                 font-family: monospace;
             }
-            .{SCOPE}.{ACTIVE} {
+            SCOPE.ACTIVE {
                 background: var(--tab-active-bg);
                 color: var(--tab-active-color);
             }
-        "#)
+        })
     }
 }
 
@@ -95,8 +95,8 @@ struct InputStyle {
 
 impl StyledComponentBase for InputStyle {
     fn base_css() -> &'static str {
-        css!(InputStyle, r#"
-            .{SCOPE} {
+        css!(InputStyle, {
+            SCOPE {
                 width: 100%;
                 padding: 6px 8px;
                 background: var(--input-bg);
@@ -105,7 +105,7 @@ impl StyledComponentBase for InputStyle {
                 border-radius: 3px;
                 margin-top: 8px;
             }
-        "#)
+        })
     }
 }
 

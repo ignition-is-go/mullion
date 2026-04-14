@@ -42,6 +42,8 @@ pub struct ActivityBarStyle {
     pub icon_active_opacity: String,
     #[prop(var = "--ab-cat-border-width", default = "2px")]
     pub category_border_width: String,
+    #[prop(var = "--ab-cat-color", default = "transparent")]
+    pub category_color: String,
 }
 
 impl css_styled::StyledComponentBase for ActivityBarStyle {
@@ -114,6 +116,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 height: var(--ab-icon-size);
                 flex-shrink: 0;
                 overflow: hidden;
+                stroke: var(--ab-icon-stroke-color);
             }
             DOT {
                 position: absolute;
@@ -123,6 +126,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 width: 4px;
                 height: 4px;
                 border-radius: 50%;
+                background: var(--ab-cat-color);
             }
             CAT_BORDER {
                 position: absolute;
@@ -130,6 +134,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 top: 0;
                 bottom: 0;
                 width: var(--ab-cat-border-width);
+                background: var(--ab-cat-color);
             }
         })
     }
@@ -191,7 +196,6 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         }
     });
 
-    let icon_stroke_color = style.icon_stroke_color.clone();
     let icon_active_opacity = style.icon_active_opacity.clone();
 
     let ctx_actions = ctx.clone();
@@ -220,7 +224,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                      ctx_dragend.dragging_pane.set(None);
                                  }>
                                 <span class=ActivityBarStyle::ICON_SLOT>
-                                    {render_icon(&icon, &icon_stroke_color)}
+                                    {render_icon(&icon)}
                                 </span>
                                 <span class=ActivityBarStyle::LABEL style="font-weight:600;font-size:12px"></span>
                             </div>
@@ -259,28 +263,28 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                         <span class=ActivityBarStyle::ICON_SLOT>
                                             {if show_dot {
                                                 Some(view! {
-                                                    <span class=ActivityBarStyle::DOT style=format!("background:{}", dot_color)></span>
+                                                    <span class=ActivityBarStyle::DOT style=ActivityBarStyle::vars(|v| v.category_color(&dot_color))></span>
                                                 })
                                             } else { None }}
-                                            {render_icon(&cat_icon, &icon_stroke_color)}
+                                            {render_icon(&cat_icon)}
                                         </span>
                                         <span class=ActivityBarStyle::LABEL>{cat_name.clone()}</span>
                                     </button>
                                     {if is_expanded {
                                         Some(view! {
                                             <div style="position:relative">
-                                                <div class=ActivityBarStyle::CAT_BORDER style=format!("background:{}", cat_color_for_border)></div>
+                                                <div class=ActivityBarStyle::CAT_BORDER style=ActivityBarStyle::vars(|v| v.category_color(&cat_color_for_border))></div>
                                                 {acts.into_iter().map(|(act_id, name, icon)| {
                                                     let is_active = current_active.as_ref() == Some(&act_id);
                                                     let active_style = if is_active {
                                                         ActivityBarStyle::vars(|v| {
                                                             v.icon_opacity(&icon_active_opacity)
                                                              .icon_color(&cat_color_for_border)
+                                                             .icon_stroke_color(&cat_color_for_border)
                                                         })
                                                     } else {
                                                         String::new()
                                                     };
-                                                    let act_stroke = if is_active { cat_color_for_border.clone() } else { icon_stroke_color.clone() };
                                                     let ctx = ctx.clone();
                                                     let pid = pane_id.clone();
                                                     let label = name.clone();
@@ -291,7 +295,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                                             ctx.set_active_activity(&pid, Some(act_id.clone()));
                                                         }>
                                                             <span class=ActivityBarStyle::ICON_SLOT>
-                                                                {render_icon(&icon, &act_stroke)}
+                                                                {render_icon(&icon)}
                                                             </span>
                                                             <span class=ActivityBarStyle::LABEL>{label.clone()}</span>
                                                         </button>
@@ -343,24 +347,23 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     }
 }
 
-fn render_icon(icon: &ActivityIcon, stroke_color: &str) -> AnyView {
+fn render_icon(icon: &ActivityIcon) -> AnyView {
     let icon_class = ActivityBarStyle::ICON;
     match icon {
         ActivityIcon::Class(class) => view! { <span class=format!("{} {}", icon_class, class)></span> }.into_any(),
         ActivityIcon::Svg(svg) => {
-            let normalized = normalize_svg(svg, stroke_color);
+            let normalized = normalize_svg(svg);
             view! { <span class=icon_class inner_html={normalized}></span> }.into_any()
         }
         ActivityIcon::Url(url) => view! { <img class=icon_class src={url.clone()} style="object-fit:contain" /> }.into_any(),
     }
 }
 
-fn normalize_svg(svg: &str, stroke_color: &str) -> String {
+fn normalize_svg(svg: &str) -> String {
     let mut result = svg.to_string();
     if let Some(pos) = result.find("<svg") {
         let insert_at = pos + 4;
-        let style_attr = format!(" style=\"width:100%;height:100%;display:block;stroke:{}\"", stroke_color);
-        result.insert_str(insert_at, &style_attr);
+        result.insert_str(insert_at, " style=\"width:100%;height:100%;display:block\"");
     }
     result
 }

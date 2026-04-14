@@ -1,8 +1,8 @@
 pub mod activity;
+pub mod theme;
 pub mod components;
 pub mod context;
 pub mod events;
-pub mod theme;
 pub mod tree;
 pub mod workspace;
 

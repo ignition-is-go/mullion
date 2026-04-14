@@ -298,6 +298,7 @@ dependencies = [
 [[package]]
 name = "css-spec-data"
 version = "0.1.0"
+source = "git+https://github.com/ignition-is-go/css-styled.git#67e3079a8ce22e141dbe38609afe3dff429f5f7e"
 dependencies = [
  "serde",
  "serde_json",
@@ -307,6 +308,7 @@ dependencies = [
 [[package]]
 name = "css-styled"
 version = "0.1.0"
+source = "git+https://github.com/ignition-is-go/css-styled.git#67e3079a8ce22e141dbe38609afe3dff429f5f7e"
 dependencies = [
  "css-spec-data",
  "css-styled-derive",
@@ -315,6 +317,7 @@ dependencies = [
 [[package]]
 name = "css-styled-derive"
 version = "0.1.0"
+source = "git+https://github.com/ignition-is-go/css-styled.git#67e3079a8ce22e141dbe38609afe3dff429f5f7e"
 dependencies = [
  "css-spec-data",
  "proc-macro2",
@@ -1042,6 +1045,7 @@ name = "mullion-demo"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "css-styled",
  "leptos",
  "md-icons",
  "mullion",

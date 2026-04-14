@@ -1,7 +1,115 @@
+use css_styled::{StyledComponent, StyledComponentBase, css, IntoCss};
 use leptos::prelude::*;
 use md_icons::outlined;
 use mullion::*;
 use serde::{Deserialize, Serialize};
+
+// ── Demo styles ──────────────────────────────────────────────────────────────
+
+#[derive(StyledComponent, Clone, Debug)]
+#[component(scope = "demo-layout")]
+#[component(theme = MullionTheme)]
+#[component(class(content = "demo-layout-content", footer = "demo-layout-footer"))]
+#[component(base_css)]
+struct DemoLayoutStyle {
+    #[prop(var = "--demo-footer-bg", default = theme.bg)]
+    pub footer_bg: String,
+    #[prop(var = "--demo-footer-border", default = "1px solid var(--ml-border)")]
+    pub footer_border: String,
+}
+
+impl StyledComponentBase for DemoLayoutStyle {
+    fn base_css() -> &'static str {
+        css!(DemoLayoutStyle, {
+            SCOPE {
+                display: flex;
+                flex-direction: column;
+                width: 100vw;
+                height: 100vh;
+            }
+            CONTENT {
+                flex: 1;
+                min-height: 0;
+                overflow: hidden;
+            }
+            FOOTER {
+                display: flex;
+                gap: 1px;
+                background: var(--demo-footer-bg);
+                padding: 2px 4px;
+                border-top: var(--demo-footer-border);
+            }
+        })
+    }
+}
+
+#[derive(StyledComponent, Clone, Debug)]
+#[component(scope = "demo-tab")]
+#[component(theme = MullionTheme)]
+#[component(modifier(active))]
+#[component(base_css)]
+struct FooterTabStyle {
+    #[prop(var = "--tab-bg", default = "transparent")]
+    pub bg: String,
+    #[prop(var = "--tab-color", default = theme.text_muted)]
+    pub color: String,
+    #[prop(var = "--tab-active-bg", default = theme.accent)]
+    pub active_bg: String,
+    #[prop(var = "--tab-active-color", default = theme.text)]
+    pub active_color: String,
+}
+
+impl StyledComponentBase for FooterTabStyle {
+    fn base_css() -> &'static str {
+        css!(FooterTabStyle, {
+            SCOPE {
+                background: var(--tab-bg);
+                color: var(--tab-color);
+                border: none;
+                padding: 2px 8px;
+                font-size: 11px;
+                cursor: pointer;
+                border-radius: 2px;
+                font-family: monospace;
+            }
+            SCOPE.ACTIVE {
+                background: var(--tab-active-bg);
+                color: var(--tab-active-color);
+            }
+        })
+    }
+}
+
+#[derive(StyledComponent, Clone, Debug)]
+#[component(scope = "demo-input")]
+#[component(theme = MullionTheme)]
+#[component(base_css)]
+struct InputStyle {
+    #[prop(var = "--input-bg", default = theme.accent)]
+    pub bg: String,
+    #[prop(var = "--input-border", default = "1px solid var(--ml-highlight)")]
+    pub border: String,
+    #[prop(var = "--input-color", default = theme.text)]
+    pub color: String,
+}
+
+impl StyledComponentBase for InputStyle {
+    fn base_css() -> &'static str {
+        css!(InputStyle, {
+            SCOPE {
+                width: 100%;
+                padding: 6px 8px;
+                background: var(--input-bg);
+                border: var(--input-border);
+                color: var(--input-color);
+                border-radius: 3px;
+                margin-top: 8px;
+            }
+        })
+    }
+}
+
+// ── Data ─────────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct DemoData {
@@ -108,6 +216,8 @@ fn categories() -> Vec<Category<DemoData>> {
     ]
 }
 
+// ── Activity content views ───────────────────────────────────────────────────
+
 #[component]
 fn FilesActivity(data: ReadSignal<DemoData>) -> impl IntoView {
     let files = vec![
@@ -131,8 +241,7 @@ fn SearchActivity(data: ReadSignal<DemoData>) -> impl IntoView {
         <div class="activity-content">
             <h2>{move || data.get().label} " - Search"</h2>
             <p>"Type to search across files..."</p>
-            <input type="text" placeholder="Search..."
-                style="width: 100%; padding: 6px 8px; background: #3c3c3c; border: 1px solid #555; color: #ccc; border-radius: 3px; margin-top: 8px;" />
+            <input type="text" placeholder="Search..." class=InputStyle::SCOPE />
         </div>
     }
 }
@@ -156,6 +265,8 @@ fn SettingsActivity() -> impl IntoView {
         </div>
     }
 }
+
+// ── Workspaces ───────────────────────────────────────────────────────────────
 
 fn default_workspace() -> PaneNode<DemoData> {
     PaneNode::Split {
@@ -196,6 +307,8 @@ fn stacked_workspace() -> PaneNode<DemoData> {
     }
 }
 
+// ── App ──────────────────────────────────────────────────────────────────────
+
 #[component]
 fn App() -> impl IntoView {
     let workspaces = vec![
@@ -217,7 +330,6 @@ fn App() -> impl IntoView {
         drop_indicator: "rgba(255,255,255,0.06)".into(),
     });
 
-    // Styles only override non-color values (or omit for defaults)
     provide_context(ActivityBarStyle {
         icon_opacity: "1".into(),
         icon_active_opacity: "1".into(),
@@ -229,6 +341,13 @@ fn App() -> impl IntoView {
         ..Default::default()
     });
 
+    // Demo-specific style CSS
+    let demo_css = [
+        DemoLayoutStyle::default().to_css(),
+        FooterTabStyle::default().to_css(),
+        InputStyle::default().to_css(),
+    ].join("\n");
+
     let on_event = move |event: PaneEvent<DemoData>| {
         let desc = match &event {
             PaneEvent::Split { target, new_id, direction, .. } => {
@@ -239,12 +358,13 @@ fn App() -> impl IntoView {
             PaneEvent::Moved { source, destination, edge } => format!("[mullion] Moved {:?} -> {:?} ({:?})", source, destination, edge),
             PaneEvent::DirectionChanged { pane, direction } => format!("[mullion] Dir {:?} -> {:?}", pane, direction),
             PaneEvent::ActivityChanged { pane, activity } => format!("[mullion] Activity {:?} -> {:?}", pane, activity),
-            PaneEvent::TreeChanged { .. } => return, // skip noisy tree snapshots
+            PaneEvent::TreeChanged { .. } => return,
         };
         web_sys::console::log_1(&desc.into());
     };
 
     view! {
+        <style>{demo_css}</style>
         <MullionProvider
             initial_tree=default_workspace()
             categories=categories()
@@ -265,27 +385,26 @@ fn DemoLayout(workspace_mgr: WorkspaceManager<DemoData>) -> impl IntoView {
     let ctx_for_footer = ctx.clone();
 
     view! {
-        <div style="display:flex;flex-direction:column;width:100vw;height:100vh;">
-            <div style="flex:1;min-height:0;overflow:hidden;">
+        <div class=DemoLayoutStyle::SCOPE>
+            <div class=DemoLayoutStyle::CONTENT>
                 <MullionPaneTree ctx=ctx />
             </div>
-            <div style="display:flex;gap:1px;background:#0a0a0a;padding:2px 4px;border-top:1px solid #1a1a1a;">
+            <div class=DemoLayoutStyle::FOOTER>
                 {move || {
                     let ws_list = mgr.list();
                     let current = mgr.active_id();
                     ws_list.into_iter().enumerate().map(|(i, ws)| {
                         let is_active = ws.id == current;
-                        let bg = if is_active { "#222" } else { "transparent" };
-                        let color = if is_active { "#aaa" } else { "#444" };
-                        let style = format!(
-                            "background:{};color:{};border:none;padding:2px 8px;font-size:11px;cursor:pointer;border-radius:2px;font-family:monospace",
-                            bg, color
-                        );
+                        let class = if is_active {
+                            FooterTabStyle::class(&[FooterTabModifier::Active])
+                        } else {
+                            FooterTabStyle::SCOPE.to_string()
+                        };
                         let mgr = mgr.clone();
                         let ctx = ctx_for_footer.clone();
                         let ws_id = ws.id.clone();
                         view! {
-                            <button style={style} on:click=move |_| {
+                            <button class=class on:click=move |_| {
                                 if let Some(tree) = mgr.switch_to(&ws_id) {
                                     ctx.set_tree(tree);
                                 }

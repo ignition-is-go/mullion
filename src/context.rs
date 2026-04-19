@@ -6,7 +6,7 @@ use send_wrapper::SendWrapper;
 
 use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::events::PaneEvent;
-use crate::components::activity_bar::ActivityBarStyle;
+use crate::components::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
 use crate::components::drop_overlay::DropOverlayStyle;
 use crate::components::mullion_root::MullionStyle;
 use crate::components::pane_view::PaneStyle;
@@ -40,6 +40,8 @@ pub struct MullionContext<D: PaneData> {
     pub split_handle_style: SplitHandleStyle,
     pub pane_style: PaneStyle,
     pub drop_overlay_style: DropOverlayStyle,
+    /// Activity bar interaction options (resolved at provider time).
+    pub activity_bar_behavior: ActivityBarBehavior,
     /// Optional app icon displayed at the top of every activity bar.
     pub app_icon: Option<ActivityIcon>,
     /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
@@ -57,6 +59,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         split_handle_style: SplitHandleStyle,
         pane_style: PaneStyle,
         drop_overlay_style: DropOverlayStyle,
+        activity_bar_behavior: ActivityBarBehavior,
         app_icon: Option<ActivityIcon>,
     ) -> Self {
         // Flatten categories into metadata + activities with category ids
@@ -94,6 +97,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             split_handle_style,
             pane_style,
             drop_overlay_style,
+            activity_bar_behavior,
             app_icon,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }

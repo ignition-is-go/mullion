@@ -50,6 +50,12 @@ pub struct ActivityBarStyle {
     pub icon_active_opacity: String,
     #[prop(var = "--ab-cat-border-width", default = "2px")]
     pub category_border_width: String,
+    /// `display` value applied to activity labels on pane hover. Defaults to
+    /// `inline` (labels appear when the bar expands). Set to `none` together
+    /// with `expanded_width = width` and `expanded_padding = "0"` to fully
+    /// disable hover-to-expand.
+    #[prop(var = "--ab-label-hover-display", default = "inline")]
+    pub label_hover_display: String,
 }
 
 impl css_styled::StyledComponentBase for ActivityBarStyle {
@@ -89,7 +95,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 text-overflow: ellipsis;
             }
             SCOPE:hover LABEL {
-                display: inline;
+                display: var(--ab-label-hover-display);
             }
             ICON_SLOT {
                 width: var(--ab-width);

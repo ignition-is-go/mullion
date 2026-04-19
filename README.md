@@ -109,6 +109,22 @@ provide_context(DropOverlayTheme {
 
 Active activity icons automatically take their category's color.
 
+### Disabling hover-to-expand
+
+By default the activity bar widens and reveals activity labels on hover. To
+pin it to a fixed width, set `expanded_width` equal to `width`, zero the
+`expanded_padding`, and set `label_hover_display` to `none`:
+
+```rust
+provide_context(ActivityBarStyle {
+    width: "28px".into(),
+    expanded_width: "28px".into(),
+    expanded_padding: "0".into(),
+    label_hover_display: "none".into(),
+    ..Default::default()
+});
+```
+
 ## Components
 
 | Component | Purpose |

@@ -11,7 +11,7 @@ pub use components::mullion_root::{MullionPaneTree, MullionProvider, MullionRoot
 pub use components::workspace_switcher::{WorkspaceSwitcher, WorkspaceSwitcherStyle, WorkspaceSwitcherModifier};
 pub use context::MullionContext;
 pub use events::PaneEvent;
-pub use components::activity_bar::ActivityBarStyle;
+pub use components::activity_bar::{ActivityBarBehavior, ActivityBarModifier, ActivityBarStyle};
 pub use components::drop_overlay::DropOverlayStyle;
 pub use components::mullion_root::MullionStyle;
 pub use components::pane_view::PaneStyle;

@@ -8,7 +8,7 @@ use crate::events::PaneEvent;
 use crate::theme::MullionTheme;
 use crate::tree::{PaneData, PaneNode};
 
-use super::activity_bar::ActivityBarStyle;
+use super::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
 use super::drop_overlay::DropOverlayStyle;
 use super::pane_view::{PaneStyle, PaneView};
 use super::split_handle::SplitHandleStyle;
@@ -65,6 +65,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let pane_style = use_context::<PaneStyle>().unwrap_or_default();
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
     let ws_style = use_context::<WorkspaceSwitcherStyle>().unwrap_or_default();
+    let activity_bar_behavior = use_context::<ActivityBarBehavior>().unwrap_or_default();
 
     let all_css = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}",
@@ -87,6 +88,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         split_handle_style,
         pane_style,
         drop_overlay_style,
+        activity_bar_behavior,
         app_icon,
     );
 
@@ -130,6 +132,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let pane_style = use_context::<PaneStyle>().unwrap_or_default();
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
     let ws_style = use_context::<WorkspaceSwitcherStyle>().unwrap_or_default();
+    let activity_bar_behavior = use_context::<ActivityBarBehavior>().unwrap_or_default();
 
     let all_css = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}",
@@ -152,6 +155,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         split_handle_style,
         pane_style,
         drop_overlay_style,
+        activity_bar_behavior,
         app_icon,
     );
 

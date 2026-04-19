@@ -12,6 +12,27 @@ struct ActivityBarInternal {
     pub category_color: String,
 }
 
+/// Behavior options for the activity bar. Provide via Leptos context before
+/// mounting `MullionProvider` or `MullionRoot` to override defaults.
+///
+/// Unlike `ActivityBarStyle` (which controls appearance via CSS variables),
+/// this struct controls interaction semantics that can't be expressed as a
+/// single CSS property.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivityBarBehavior {
+    /// When `true` (the default), the activity bar widens on hover to reveal
+    /// activity labels. Set to `false` to pin it at its collapsed width —
+    /// useful when labels would overflow surrounding UI, or when the host
+    /// app wants a purely icon-driven bar.
+    pub hover_expand: bool,
+}
+
+impl Default for ActivityBarBehavior {
+    fn default() -> Self {
+        Self { hover_expand: true }
+    }
+}
+
 /// Style for the activity bar, powered by css-styled.
 ///
 /// All customizable values are CSS custom properties. Hover behavior and
@@ -21,6 +42,7 @@ struct ActivityBarInternal {
 #[component(scope = "mullion-ab")]
 #[component(theme = MullionTheme)]
 #[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border", icon = "mullion-ab-icon"))]
+#[component(modifier(collapsed))]
 #[component(internals(ActivityBarInternal))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
@@ -79,7 +101,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 padding-right: 0;
                 transition: width 0.15s ease, padding-right 0.15s ease;
             }
-            SCOPE:hover PANEL {
+            SCOPE:not(.COLLAPSED):hover PANEL {
                 width: var(--ab-expanded-width);
                 padding-right: var(--ab-expanded-padding);
             }
@@ -88,7 +110,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 overflow: hidden;
                 text-overflow: ellipsis;
             }
-            SCOPE:hover LABEL {
+            SCOPE:not(.COLLAPSED):hover LABEL {
                 display: inline;
             }
             ICON_SLOT {
@@ -206,8 +228,14 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
 
     let ctx_actions = ctx.clone();
 
+    let scope_class = if ctx.activity_bar_behavior.hover_expand {
+        ActivityBarStyle::SCOPE.to_string()
+    } else {
+        ActivityBarStyle::class(&[ActivityBarModifier::Collapsed])
+    };
+
     view! {
-        <div class=ActivityBarStyle::SCOPE>
+        <div class=scope_class>
             <div class=ActivityBarStyle::PANEL>
                 // App icon + categories + activities
                 <div>
@@ -350,6 +378,42 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                 </div>
             </div>
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use css_styled::IntoCss;
+
+    #[test]
+    fn collapsed_modifier_gates_hover_rules() {
+        let css = ActivityBarStyle::default().to_css();
+        // The :not(.collapsed) guard must appear on both hover rules so the
+        // bar stays at its collapsed width when the modifier is applied.
+        assert!(
+            css.contains(":not(.collapsed):hover"),
+            "expected :not(.collapsed):hover in base CSS, got: {css}"
+        );
+        // And a plain SCOPE:hover rule must not slip through — otherwise the
+        // modifier wouldn't actually suppress the hover behavior.
+        assert!(
+            !css.contains(".mullion-ab:hover"),
+            "unguarded .mullion-ab:hover rule present in base CSS: {css}"
+        );
+    }
+
+    #[test]
+    fn collapsed_class_has_expected_name() {
+        assert_eq!(
+            ActivityBarStyle::class(&[ActivityBarModifier::Collapsed]),
+            "mullion-ab collapsed",
+        );
+    }
+
+    #[test]
+    fn behavior_defaults_to_hover_expand_true() {
+        assert!(ActivityBarBehavior::default().hover_expand);
     }
 }
 

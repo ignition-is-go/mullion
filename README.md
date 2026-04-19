@@ -109,6 +109,17 @@ provide_context(DropOverlayTheme {
 
 Active activity icons automatically take their category's color.
 
+### Activity bar behavior
+
+Interaction semantics that can't be expressed as a CSS variable live on
+`ActivityBarBehavior`. Provide it via context before mounting the root:
+
+```rust
+provide_context(ActivityBarBehavior {
+    hover_expand: false,   // pin the bar at its collapsed width; default: true
+});
+```
+
 ## Components
 
 | Component | Purpose |

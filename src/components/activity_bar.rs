@@ -175,7 +175,7 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
 #[component]
 pub fn ActivityBar<D: PaneData + Send + Sync>(
     pane_id: PaneId,
-    data: ReadSignal<D>,
+    data: Signal<D>,
     ctx: MullionContext<D>,
     #[prop(optional)]
     app_icon: Option<ActivityIcon>,
@@ -206,11 +206,10 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     let ctx_for_active = ctx.clone();
     let pid_for_active = pane_id.clone();
     let active_activity = Memo::new(move |_| {
-        let tree = ctx_for_active.tree.get();
-        match tree.find(&pid_for_active) {
+        ctx_for_active.tree.with(|tree| match tree.find(&pid_for_active) {
             Some(crate::tree::PaneNode::Leaf { active_activity, .. }) => active_activity.clone(),
             _ => None,
-        }
+        })
     });
 
     // Auto-expand category of active activity

@@ -139,7 +139,7 @@ Available via `use_context::<MullionContext<D>>()` inside a `MullionProvider`:
 // Pane operations
 ctx.split_pane(&pane_id, SplitDirection::Horizontal, PaneId::new("new-pane"), new_data);
 ctx.close_pane(&pane_id);
-ctx.resize_pane(&pane_id, 0.5);
+ctx.resize_split(&split_key, 0.5);  // split_key = first leaf id under the split's `second` subtree
 ctx.move_pane(&source_id, &dest_id, DropEdge::Right);
 ctx.change_split_direction(&pane_id, SplitDirection::Vertical);
 ctx.set_active_activity(&pane_id, Some(ActivityId::new("files")));

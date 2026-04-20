@@ -219,7 +219,7 @@ fn categories() -> Vec<Category<DemoData>> {
 // ── Activity content views ───────────────────────────────────────────────────
 
 #[component]
-fn FilesActivity(data: ReadSignal<DemoData>) -> impl IntoView {
+fn FilesActivity(data: Signal<DemoData>) -> impl IntoView {
     let files = vec![
         "src/main.rs", "src/lib.rs", "src/components/mod.rs",
         "src/components/header.rs", "src/components/sidebar.rs",
@@ -236,7 +236,7 @@ fn FilesActivity(data: ReadSignal<DemoData>) -> impl IntoView {
 }
 
 #[component]
-fn SearchActivity(data: ReadSignal<DemoData>) -> impl IntoView {
+fn SearchActivity(data: Signal<DemoData>) -> impl IntoView {
     view! {
         <div class="activity-content">
             <h2>{move || data.get().label} " - Search"</h2>
@@ -354,7 +354,7 @@ fn App() -> impl IntoView {
                 format!("[mullion] Split {:?} -> {:?} ({:?})", target, new_id, direction)
             }
             PaneEvent::Closed { id, .. } => format!("[mullion] Closed {:?}", id),
-            PaneEvent::Resized { pane, ratio } => format!("[mullion] Resized {:?} to {:.0}%", pane, ratio * 100.0),
+            PaneEvent::Resized { split_key, ratio } => format!("[mullion] Resized split {:?} to {:.0}%", split_key, ratio * 100.0),
             PaneEvent::Moved { source, destination, edge } => format!("[mullion] Moved {:?} -> {:?} ({:?})", source, destination, edge),
             PaneEvent::DirectionChanged { pane, direction } => format!("[mullion] Dir {:?} -> {:?}", pane, direction),
             PaneEvent::ActivityChanged { pane, activity } => format!("[mullion] Activity {:?} -> {:?}", pane, activity),

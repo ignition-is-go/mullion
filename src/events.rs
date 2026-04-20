@@ -15,9 +15,11 @@ pub enum PaneEvent<D: PaneData> {
         id: PaneId,
         data: D,
     },
-    /// A pane was resized (split ratio changed).
+    /// A split was resized. `split_key` is the first leaf id under the
+    /// split's `second` subtree — the same key used to address splits
+    /// throughout the API.
     Resized {
-        pane: PaneId,
+        split_key: PaneId,
         ratio: f64,
     },
     /// A pane was moved to a new position.

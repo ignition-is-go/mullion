@@ -57,7 +57,10 @@ pub struct ActivityDef<D: PaneData> {
     /// Return true if this activity should appear in a pane with the given data.
     pub filter: fn(&D) -> bool,
     /// Render this activity's content for a specific pane.
-    pub render: fn(PaneId, ReadSignal<D>) -> AnyView,
+    ///
+    /// The `Signal<D>` fires only when *this* pane's data changes — not
+    /// when other panes update or when the tree structure shifts.
+    pub render: fn(PaneId, Signal<D>) -> AnyView,
 }
 
 impl<D: PaneData> Clone for ActivityDef<D> {

@@ -12,7 +12,10 @@ use crate::components::mullion_root::MullionStyle;
 use crate::components::pane_view::PaneStyle;
 use crate::components::split_handle::SplitHandleStyle;
 use crate::theme::MullionTheme;
-use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
+use crate::tree::{
+    collect_split_ratios, find_ratio, ActivityId, CategoryId, DropEdge, PaneData, PaneId,
+    PaneNode, SplitDirection,
+};
 
 /// The reactive store for the mullion pane system.
 ///
@@ -20,8 +23,29 @@ use crate::tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, 
 /// with panes through this context.
 #[derive(Clone)]
 pub struct MullionContext<D: PaneData> {
-    /// The reactive pane tree. Can be read to render, updated for mutations.
+    /// The reactive pane tree. Structural mutations (split / close / move /
+    /// direction change / data / active_activity) notify subscribers here.
+    ///
+    /// Ratio updates DO NOT notify this signal — they go through the
+    /// separate `ratios` map so that resize drags don't invalidate the
+    /// whole rendered tree. The tree's inline `ratio: f64` fields are
+    /// kept in sync via `update_untracked` for persistence snapshots.
     pub tree: RwSignal<PaneNode<D>>,
+    /// Per-split ratio signals, keyed by each split's `split_key` — the
+    /// first leaf id under its `second` subtree. See
+    /// [`PaneNode::set_split_ratio`] for why we key splits this way.
+    ///
+    /// Seeded from the tree on construction and re-seeded after every
+    /// structural mutation. `resize_split` writes only to these signals
+    /// (plus an untracked tree write), so ratio updates re-render only
+    /// the affected split's descendants' `Rect` memos.
+    ///
+    /// Uses `ArcRwSignal` (not `RwSignal`) so the signals' lifetimes are
+    /// tied to the map itself, not to whatever reactive scope happened
+    /// to be active when the signal was first accessed. Otherwise a
+    /// signal created lazily during a structural re-render would be
+    /// disposed along with that transient scope.
+    pub(crate) ratios: StoredValue<HashMap<PaneId, ArcRwSignal<f64>>>,
     /// All registered activities (flattened, with category ids).
     pub(crate) activities: StoredValue<Vec<ActivityWithCategory<D>>>,
     /// Category metadata (without activities), sorted by order.
@@ -84,8 +108,17 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
 
         cat_metas.sort_by_key(|c| c.order);
 
+        // Seed the ratio signal map from the initial tree's splits.
+        let mut initial_ratios = Vec::new();
+        collect_split_ratios(&initial_tree, &mut initial_ratios);
+        let ratio_map: HashMap<PaneId, ArcRwSignal<f64>> = initial_ratios
+            .into_iter()
+            .map(|(k, r)| (k, ArcRwSignal::new(r)))
+            .collect();
+
         MullionContext {
             tree: RwSignal::new(initial_tree),
+            ratios: StoredValue::new(ratio_map),
             activities: StoredValue::new(all_activities),
             categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
@@ -112,6 +145,65 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         self.emit(PaneEvent::TreeChanged { tree });
     }
 
+    /// Get-or-create the ratio signal for a split, keyed by the first leaf id
+    /// under its `second` subtree (see [`PaneNode::set_split_ratio`]).
+    ///
+    /// Returns a signal initialized from the tree if the entry was missing.
+    /// Used by the renderer to bind a split's flex-basis reactively. The
+    /// check-and-insert is performed atomically inside `try_update_value`
+    /// so concurrent callers always observe the same signal instance.
+    pub(crate) fn ratio_signal(&self, split_key: &PaneId) -> ArcRwSignal<f64> {
+        // Fast path: the map already has an entry — avoid allocating a
+        // new signal just to throw it away.
+        if let Some(sig) = self.ratios.with_value(|m| m.get(split_key).cloned()) {
+            return sig;
+        }
+        let initial = self
+            .tree
+            .with_untracked(|t| find_ratio(t, split_key))
+            .unwrap_or(0.5);
+        self.ratios
+            .try_update_value(|m| {
+                m.entry(split_key.clone())
+                    .or_insert_with(|| ArcRwSignal::new(initial))
+                    .clone()
+            })
+            // `try_update_value` only returns None if the StoredValue is
+            // disposed, which shouldn't happen while the context is alive;
+            // fall back to an unattached signal in that pathological case.
+            .unwrap_or_else(|| ArcRwSignal::new(initial))
+    }
+
+    /// Re-sync the ratio map to the current tree after a structural change.
+    ///
+    /// Adds missing entries, drops entries for splits that no longer exist,
+    /// and updates existing signals' values to match the tree. Never creates
+    /// a new signal for a still-existing split so that subscribers keep their
+    /// reference live across structural ops.
+    fn reseed_ratios(&self) {
+        let mut collected = Vec::new();
+        self.tree
+            .with_untracked(|t| collect_split_ratios(t, &mut collected));
+        let keys: std::collections::HashSet<PaneId> =
+            collected.iter().map(|(k, _)| k.clone()).collect();
+
+        self.ratios.update_value(|m| {
+            m.retain(|k, _| keys.contains(k));
+            for (key, ratio) in &collected {
+                match m.get(key) {
+                    Some(existing) => {
+                        if (existing.get_untracked() - ratio).abs() > f64::EPSILON {
+                            existing.set(*ratio);
+                        }
+                    }
+                    None => {
+                        m.insert(key.clone(), ArcRwSignal::new(*ratio));
+                    }
+                }
+            }
+        });
+    }
+
     /// Split a pane. The consumer provides the new pane's id.
     pub fn split_pane(
         &self,
@@ -123,6 +215,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         self.tree.update(|tree| {
             tree.split(target, direction, new_id.clone(), new_data.clone());
         });
+        self.reseed_ratios();
         self.emit(PaneEvent::Split {
             target: target.clone(),
             direction,
@@ -139,6 +232,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             closed_data = tree.close(id);
         });
         if let Some(ref data) = closed_data {
+            self.reseed_ratios();
             self.emit(PaneEvent::Closed {
                 id: id.clone(),
                 data: data.clone(),
@@ -148,12 +242,41 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         closed_data
     }
 
-    /// Resize the split containing a pane.
-    pub fn resize_pane(&self, pane: &PaneId, ratio: f64) {
-        self.tree.update(|tree| {
-            tree.set_ratio(pane, ratio);
+    /// Resize a split by its `split_key` (the first leaf id under the
+    /// split's `second` subtree — see [`PaneNode::set_split_ratio`]).
+    ///
+    /// `ratio` is the fraction of the split's parent area given to the
+    /// `first` subtree, clamped to `[0.1, 0.9]`.
+    ///
+    /// Writes go through two channels:
+    /// 1. The per-split ratio `ArcRwSignal` — subscribed by the affected
+    ///    leaves' rect memos, so their styles update.
+    /// 2. The tree itself, via `update_untracked`, keeping the stored
+    ///    `ratio` field in sync for persistence without notifying
+    ///    structural subscribers.
+    ///
+    /// Calls with an unknown `split_key` are ignored (no events emitted,
+    /// no signal created).
+    ///
+    /// On success, emits `PaneEvent::Resized` and `PaneEvent::TreeChanged`.
+    pub fn resize_split(&self, split_key: &PaneId, ratio: f64) {
+        if !ratio.is_finite() {
+            return;
+        }
+        let clamped = ratio.clamp(0.1, 0.9);
+        let mut matched = false;
+        self.tree.update_untracked(|tree| {
+            matched = tree.set_split_ratio(split_key, clamped);
         });
-        self.emit(PaneEvent::Resized { pane: pane.clone(), ratio });
+        if !matched {
+            return;
+        }
+        let sig = self.ratio_signal(split_key);
+        sig.set(clamped);
+        self.emit(PaneEvent::Resized {
+            split_key: split_key.clone(),
+            ratio: clamped,
+        });
         self.emit_tree_changed();
     }
 
@@ -173,6 +296,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             success = tree.move_pane(source, destination, edge);
         });
         if success {
+            self.reseed_ratios();
             self.emit(PaneEvent::Moved {
                 source: source.clone(),
                 destination: destination.clone(),
@@ -245,12 +369,14 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     /// Update the tree with a closure. Emits a TreeChanged event.
     pub fn update_tree(&self, f: impl FnOnce(&mut PaneNode<D>)) {
         self.tree.update(f);
+        self.reseed_ratios();
         self.emit_tree_changed();
     }
 
     /// Replace the entire tree (e.g., from an upstream server signal).
     pub fn set_tree(&self, new_tree: PaneNode<D>) {
         self.tree.set(new_tree);
+        self.reseed_ratios();
     }
 
     /// Register a pane's DOM element (called internally by PaneView on mount).

@@ -170,15 +170,10 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
 
     provide_context(ctx.clone());
 
-    let tree = ctx.tree;
-
     view! {
         <style>{all_css}</style>
         <div class=MullionStyle::SCOPE>
-            {move || {
-                let current_tree = tree.get();
-                view! { <PaneView node=current_tree ctx=ctx.clone() /> }
-            }}
+            <PaneView ctx=ctx />
         </div>
     }
 }
@@ -197,15 +192,11 @@ pub fn MullionPaneTree<D: PaneData + Send + Sync>(
         ctx.activity_bar_style.to_css(),
         ctx.drop_overlay_style.to_css(),
     );
-    let tree = ctx.tree;
 
     view! {
         <style>{all_css}</style>
         <div class=MullionStyle::SCOPE>
-            {move || {
-                let current_tree = tree.get();
-                view! { <PaneView node=current_tree ctx=ctx.clone() /> }
-            }}
+            <PaneView ctx=ctx />
         </div>
     }
 }

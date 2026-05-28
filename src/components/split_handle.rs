@@ -17,7 +17,7 @@ use crate::tree::SplitDirection;
 #[component(scope = "msh")]
 #[component(theme = MullionTheme)]
 #[component(class(bar = "msh-bar"))]
-#[component(modifier(horizontal, vertical))]
+#[component(modifier(horizontal, vertical, dragging))]
 #[component(base_css)]
 pub struct SplitHandleStyle {
     #[prop(var = "--msh-thickness", default = "4px")]
@@ -26,7 +26,10 @@ pub struct SplitHandleStyle {
     pub hover_target_thickness: String,
     #[prop(var = "--msh-color", default = theme.border)]
     pub color: String,
-    #[prop(css = "background", on = bar, pseudo = ":hover", default = theme.highlight)]
+    /// Bar color while the user is hovering the handle OR actively
+    /// dragging it (DRAGGING modifier). One variable shared by both
+    /// states so they stay visually identical.
+    #[prop(var = "--msh-hover-color", default = theme.highlight)]
     pub hover_color: String,
 }
 
@@ -50,6 +53,12 @@ impl css_styled::StyledComponentBase for SplitHandleStyle {
             BAR {
                 background: var(--msh-color);
                 pointer-events: none;
+            }
+            BAR:hover {
+                background: var(--msh-hover-color);
+            }
+            SCOPE.DRAGGING BAR {
+                background: var(--msh-hover-color);
             }
             SCOPE.HORIZONTAL BAR {
                 width: var(--msh-thickness);
@@ -78,8 +87,21 @@ pub fn SplitHandle(
         SplitDirection::Vertical => SplitHandleModifier::Vertical,
     };
 
+    // Tracks "drag is in progress" so the bar can stay highlighted
+    // while the cursor moves off the handle during the drag. Reactive
+    // class swap below toggles the DRAGGING modifier.
+    let dragging = RwSignal::new(false);
+    let class_sig = move || {
+        if dragging.get() {
+            SplitHandleStyle::class(&[modifier, SplitHandleModifier::Dragging])
+        } else {
+            SplitHandleStyle::class(&[modifier])
+        }
+    };
+
     let on_mousedown = move |ev: MouseEvent| {
         ev.prevent_default();
+        dragging.set(true);
 
         let target = ev.current_target().unwrap();
         let handle_el: web_sys::HtmlElement = target.unchecked_into();
@@ -148,6 +170,10 @@ pub fn SplitHandle(
             }
             closures_for_up.borrow_mut().take();
 
+            // Drop the DRAGGING class so the bar returns to default
+            // unless still hovered.
+            dragging.set(false);
+
             // Commit the final ratio to the tree (triggers re-render once)
             let ratio = *final_ratio.borrow();
             on_resize.run(ratio);
@@ -165,7 +191,7 @@ pub fn SplitHandle(
 
     view! {
         <div
-            class=SplitHandleStyle::class(&[modifier])
+            class=class_sig
             on:mousedown=on_mousedown
         >
             <div class=SplitHandleStyle::BAR />

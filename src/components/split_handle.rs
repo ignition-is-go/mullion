@@ -54,7 +54,11 @@ impl css_styled::StyledComponentBase for SplitHandleStyle {
                 background: var(--msh-color);
                 pointer-events: none;
             }
-            BAR:hover {
+            /* Bar has pointer-events:none, so :hover on the bar
+               itself never triggers — hover the SCOPE wrapper, which
+               IS the mouse hit-target, and propagate to the inner
+               BAR. Same selector pattern for the DRAGGING modifier. */
+            SCOPE:hover BAR {
                 background: var(--msh-hover-color);
             }
             SCOPE.DRAGGING BAR {

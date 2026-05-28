@@ -1,10 +1,5 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use leptos::prelude::*;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use web_sys::MouseEvent;
+use leptos_resize::{use_drag, Direction as LrhDirection};
 
 use crate::context::MullionContext;
 use crate::theme::MullionTheme;
@@ -272,82 +267,79 @@ fn SplitHandleSlot<D: PaneData + Send + Sync>(
         }
     };
 
+    // Class: base SplitHandleStyle scope + axis modifier + DRAGGING
+    // modifier driven by leptos-resize's drag signal so the bar stays
+    // highlighted for the full duration of a drag (even when the
+    // cursor leaves the handle bounds).
+    let dragging = RwSignal::new(false);
     let handle_class = move || {
-        SplitHandleStyle::class(&[match direction_memo.get() {
-            SplitDirection::Horizontal => SplitHandleModifier::Horizontal,
-            SplitDirection::Vertical => SplitHandleModifier::Vertical,
-        }])
+        let mods = if dragging.get() {
+            vec![
+                match direction_memo.get() {
+                    SplitDirection::Horizontal => SplitHandleModifier::Horizontal,
+                    SplitDirection::Vertical => SplitHandleModifier::Vertical,
+                },
+                SplitHandleModifier::Dragging,
+            ]
+        } else {
+            vec![match direction_memo.get() {
+                SplitDirection::Horizontal => SplitHandleModifier::Horizontal,
+                SplitDirection::Vertical => SplitHandleModifier::Vertical,
+            }]
+        };
+        SplitHandleStyle::class(&mods)
     };
 
-    // Drag: mousedown starts a document-level mousemove/mouseup loop.
-    // Each mousemove reads the split's current parent rect and direction
-    // (untracked, so the drag does not establish reactive dependencies)
-    // and converts the mouse position within the root container into a
-    // new ratio for this split. `resize_split` clamps and emits the
-    // Resized event.
+    // Drag — delegate the cross-cutting parts (document listeners,
+    // global cursor lock, dragging-class toggle) to leptos-resize's
+    // use_drag hook. on_move recomputes the split ratio from the
+    // pixel delta + the split's parent_rect (normalized in [0,1]
+    // relative to the root container).
     let ctx_drag = ctx.clone();
     let key_drag = split_key.clone();
-    let on_mousedown = move |ev: MouseEvent| {
-        ev.prevent_default();
-        let container: web_sys::HtmlElement = match container_ref.get() {
-            Some(el) => el.into(),
-            None => return,
+    let start_ratio = RwSignal::new(0.5_f64);
+    let ratio_for_start = ratio_sig.clone();
+    let on_start = Callback::new(move |_| {
+        start_ratio.set(ratio_for_start.get_untracked());
+    });
+    let ctx_move = ctx_drag.clone();
+    let key_move = key_drag.clone();
+    let direction_move = direction_memo;
+    let container_for_move = container_ref;
+    let on_move = Callback::new(move |delta_px: f64| {
+        let Some(container) = container_for_move.get_untracked() else {
+            return;
         };
-        let document = web_sys::window().unwrap().document().unwrap();
+        let container: &web_sys::HtmlElement = container.as_ref();
+        let root_rect = container.get_bounding_client_rect();
+        let root_dim = match direction_move.get_untracked() {
+            SplitDirection::Horizontal => root_rect.width(),
+            SplitDirection::Vertical => root_rect.height(),
+        };
+        if root_dim <= 0.0 {
+            return;
+        }
+        let parent = parent_rect.get_untracked();
+        let parent_dim = match direction_move.get_untracked() {
+            SplitDirection::Horizontal => parent.width,
+            SplitDirection::Vertical => parent.height,
+        };
+        if parent_dim <= 0.0 {
+            return;
+        }
+        let delta_ratio = delta_px / (root_dim * parent_dim);
+        let new_ratio = start_ratio.get_untracked() + delta_ratio;
+        ctx_move.resize_split(&key_move, new_ratio);
+    });
 
-        let closures: Rc<RefCell<Option<(
-            Closure<dyn FnMut(MouseEvent)>,
-            Closure<dyn FnMut(MouseEvent)>,
-        )>>> = Rc::new(RefCell::new(None));
-        let closures_for_up = closures.clone();
-        let doc_for_up = document.clone();
-
-        let ctx_move = ctx_drag.clone();
-        let key_move = key_drag.clone();
-        let parent_rect_move = parent_rect;
-        let direction_move = direction_memo;
-        let container_for_move = container.clone();
-        let mousemove_cb = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
-            let root_rect = container_for_move.get_bounding_client_rect();
-            if root_rect.width() <= 0.0 || root_rect.height() <= 0.0 {
-                return;
-            }
-            let parent = parent_rect_move.get_untracked();
-            let ratio = match direction_move.get_untracked() {
-                SplitDirection::Horizontal => {
-                    let x_frac = (ev.client_x() as f64 - root_rect.left()) / root_rect.width();
-                    (x_frac - parent.left) / parent.width
-                }
-                SplitDirection::Vertical => {
-                    let y_frac = (ev.client_y() as f64 - root_rect.top()) / root_rect.height();
-                    (y_frac - parent.top) / parent.height
-                }
-            };
-            ctx_move.resize_split(&key_move, ratio);
-        });
-
-        let mouseup_cb = Closure::<dyn FnMut(MouseEvent)>::new(move |_: MouseEvent| {
-            if let Some((ref move_cb, ref up_cb)) = *closures_for_up.borrow() {
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mousemove",
-                    move_cb.as_ref().unchecked_ref(),
-                );
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mouseup",
-                    up_cb.as_ref().unchecked_ref(),
-                );
-            }
-            closures_for_up.borrow_mut().take();
-        });
-
-        document
-            .add_event_listener_with_callback("mousemove", mousemove_cb.as_ref().unchecked_ref())
-            .unwrap();
-        document
-            .add_event_listener_with_callback("mouseup", mouseup_cb.as_ref().unchecked_ref())
-            .unwrap();
-
-        *closures.borrow_mut() = Some((mousemove_cb, mouseup_cb));
+    let direction_for_drag = direction_memo;
+    let on_mousedown = move |ev: web_sys::MouseEvent| {
+        let dir = match direction_for_drag.get_untracked() {
+            SplitDirection::Horizontal => LrhDirection::Horizontal,
+            SplitDirection::Vertical => LrhDirection::Vertical,
+        };
+        let handler = use_drag(dragging, dir, Some(on_start), Some(on_move), None);
+        handler(ev);
     };
 
     view! {

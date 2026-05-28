@@ -1,10 +1,10 @@
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use wasm_bindgen::prelude::*;
+use leptos_resize::{use_drag, Direction as LrhDirection};
+use send_wrapper::SendWrapper;
 use wasm_bindgen::JsCast;
-use web_sys::MouseEvent;
 
 use crate::theme::MullionTheme;
 use crate::tree::SplitDirection;
@@ -17,7 +17,7 @@ use crate::tree::SplitDirection;
 #[component(scope = "msh")]
 #[component(theme = MullionTheme)]
 #[component(class(bar = "msh-bar"))]
-#[component(modifier(horizontal, vertical))]
+#[component(modifier(horizontal, vertical, dragging))]
 #[component(base_css)]
 pub struct SplitHandleStyle {
     #[prop(var = "--msh-thickness", default = "4px")]
@@ -26,7 +26,10 @@ pub struct SplitHandleStyle {
     pub hover_target_thickness: String,
     #[prop(var = "--msh-color", default = theme.border)]
     pub color: String,
-    #[prop(css = "background", on = bar, pseudo = ":hover", default = theme.highlight)]
+    /// Bar color while hovered OR actively dragging. Drag state is
+    /// driven by leptos-resize via the DRAGGING modifier toggled on
+    /// the scope element.
+    #[prop(var = "--msh-hover-color", default = theme.highlight)]
     pub hover_color: String,
 }
 
@@ -51,6 +54,17 @@ impl css_styled::StyledComponentBase for SplitHandleStyle {
                 background: var(--msh-color);
                 pointer-events: none;
             }
+            /* Bar has pointer-events:none, so :hover never fires on
+               the bar itself — hover the SCOPE wrapper (the actual
+               mouse hit-target with cursor:resize) and propagate
+               down. Same selector shape for the DRAGGING modifier so
+               the highlight is identical in both states. */
+            SCOPE:hover BAR {
+                background: var(--msh-hover-color);
+            }
+            SCOPE.DRAGGING BAR {
+                background: var(--msh-hover-color);
+            }
             SCOPE.HORIZONTAL BAR {
                 width: var(--msh-thickness);
                 height: 100%;
@@ -65,107 +79,114 @@ impl css_styled::StyledComponentBase for SplitHandleStyle {
 
 /// A draggable handle between two split panes for resizing.
 ///
-/// Renders a wider invisible hover target with a narrower visible separator
-/// centered inside it. All styling is driven by `SplitHandleStyle` via
-/// css-styled scoped CSS classes and custom properties.
+/// Renders a wider invisible hover target with a narrower visible
+/// separator centered inside it. Drag tracking, the dragging-class
+/// toggle, and the global cursor lock are all delegated to
+/// `leptos_resize::use_drag`. The handle snapshots the starting
+/// flex-basis of its two sibling panes on drag start and updates
+/// their inline style directly during drag (smooth resize without
+/// re-rendering), then commits the final ratio via `on_resize` on
+/// release.
 #[component]
 pub fn SplitHandle(
     direction: SplitDirection,
     on_resize: Callback<f64>,
 ) -> impl IntoView {
-    let modifier = match direction {
+    let axis_modifier = match direction {
         SplitDirection::Horizontal => SplitHandleModifier::Horizontal,
         SplitDirection::Vertical => SplitHandleModifier::Vertical,
     };
 
-    let on_mousedown = move |ev: MouseEvent| {
-        ev.prevent_default();
+    // Per-drag snapshot: (start_ratio, parent_dim_px, first_child, last_child).
+    // SendWrapper because Callbacks require Send+Sync but the inner
+    // Rc<Cell<_>> + HtmlElements are wasm-only !Send/!Sync types.
+    type DragState = (f64, f64, web_sys::HtmlElement, web_sys::HtmlElement);
+    let state: SendWrapper<Rc<Cell<Option<DragState>>>> =
+        SendWrapper::new(Rc::new(Cell::new(None)));
 
-        let target = ev.current_target().unwrap();
-        let handle_el: web_sys::HtmlElement = target.unchecked_into();
-        let parent = handle_el
-            .parent_element()
-            .expect("split handle must have a parent");
+    // NodeRef on the outer div so on_start can walk to its parent and
+    // discover the two sibling panes.
+    let handle_ref: NodeRef<leptos::html::Div> = NodeRef::new();
 
-        let dir = direction;
-        let document = web_sys::window().unwrap().document().unwrap();
-
-        // Get sibling elements for live CSS updates during drag
+    let state_start = state.clone();
+    let on_start = Callback::new(move |_| {
+        let Some(el) = handle_ref.get_untracked() else {
+            return;
+        };
+        let el: &web_sys::HtmlElement = el.as_ref();
+        let Some(parent) = el.parent_element() else {
+            return;
+        };
         let children = parent.children();
-        let first_child: Option<web_sys::HtmlElement> = children
+        let first: Option<web_sys::HtmlElement> = children
             .item(0)
             .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok());
-        let last_child: Option<web_sys::HtmlElement> = children
-            .item(children.length() - 1)
+        let last: Option<web_sys::HtmlElement> = children
+            .item(children.length().saturating_sub(1))
             .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok());
+        let (Some(first), Some(last)) = (first, last) else {
+            return;
+        };
+        let parent_rect = parent.get_bounding_client_rect();
+        let first_rect = first.get_bounding_client_rect();
+        let (parent_dim, first_dim) = match direction {
+            SplitDirection::Horizontal => (parent_rect.width(), first_rect.width()),
+            SplitDirection::Vertical => (parent_rect.height(), first_rect.height()),
+        };
+        if parent_dim <= 0.0 {
+            return;
+        }
+        let start_ratio = (first_dim / parent_dim).clamp(0.0, 1.0);
+        (*state_start).set(Some((start_ratio, parent_dim, first, last)));
+    });
 
-        let final_ratio: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.5));
+    let state_move = state.clone();
+    let on_move = Callback::new(move |delta: f64| {
+        let Some((start_ratio, parent_dim, first, last)) = (*state_move).take() else {
+            return;
+        };
+        let new_ratio = (start_ratio + delta / parent_dim).clamp(0.1, 0.9);
+        let first_pct = format!("{}%", new_ratio * 100.0);
+        let second_pct = format!("{}%", (1.0 - new_ratio) * 100.0);
+        let _ = first.style().set_property("flex-basis", &first_pct);
+        let _ = last.style().set_property("flex-basis", &second_pct);
+        (*state_move).set(Some((start_ratio, parent_dim, first, last)));
+    });
 
-        let closures: Rc<RefCell<Option<(
-            Closure<dyn FnMut(MouseEvent)>,
-            Closure<dyn FnMut(MouseEvent)>,
-        )>>> = Rc::new(RefCell::new(None));
+    let state_end = state.clone();
+    let on_end = Callback::new(move |delta: f64| {
+        let Some((start_ratio, parent_dim, _first, _last)) = (*state_end).take() else {
+            return;
+        };
+        let final_ratio = (start_ratio + delta / parent_dim).clamp(0.1, 0.9);
+        on_resize.run(final_ratio);
+    });
 
-        let closures_for_up = closures.clone();
-        let doc_for_up = document.clone();
-        let ratio_for_move = final_ratio.clone();
+    let dragging = RwSignal::new(false);
+    let lrh_direction = match direction {
+        SplitDirection::Horizontal => LrhDirection::Horizontal,
+        SplitDirection::Vertical => LrhDirection::Vertical,
+    };
+    let on_mousedown = use_drag(
+        dragging,
+        lrh_direction,
+        Some(on_start),
+        Some(on_move),
+        Some(on_end),
+    );
 
-        let mousemove_cb = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
-            let rect = parent.get_bounding_client_rect();
-            let ratio = match dir {
-                SplitDirection::Horizontal => {
-                    (ev.client_x() as f64 - rect.left()) / rect.width()
-                }
-                SplitDirection::Vertical => {
-                    (ev.client_y() as f64 - rect.top()) / rect.height()
-                }
-            };
-            let ratio = ratio.clamp(0.1, 0.9);
-            *ratio_for_move.borrow_mut() = ratio;
-
-            // Update CSS directly for smooth dragging without re-rendering
-            let first_pct = format!("{}%", ratio * 100.0);
-            let second_pct = format!("{}%", (1.0 - ratio) * 100.0);
-            if let Some(ref el) = first_child {
-                let _ = el.style().set_property("flex-basis", &first_pct);
-            }
-            if let Some(ref el) = last_child {
-                let _ = el.style().set_property("flex-basis", &second_pct);
-            }
-        });
-
-        let mouseup_cb = Closure::<dyn FnMut(MouseEvent)>::new(move |_: MouseEvent| {
-            // Remove listeners
-            if let Some((ref move_cb, ref up_cb)) = *closures_for_up.borrow() {
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mousemove",
-                    move_cb.as_ref().unchecked_ref(),
-                );
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mouseup",
-                    up_cb.as_ref().unchecked_ref(),
-                );
-            }
-            closures_for_up.borrow_mut().take();
-
-            // Commit the final ratio to the tree (triggers re-render once)
-            let ratio = *final_ratio.borrow();
-            on_resize.run(ratio);
-        });
-
-        document
-            .add_event_listener_with_callback("mousemove", mousemove_cb.as_ref().unchecked_ref())
-            .unwrap();
-        document
-            .add_event_listener_with_callback("mouseup", mouseup_cb.as_ref().unchecked_ref())
-            .unwrap();
-
-        *closures.borrow_mut() = Some((mousemove_cb, mouseup_cb));
+    let class_sig = move || {
+        if dragging.get() {
+            SplitHandleStyle::class(&[axis_modifier, SplitHandleModifier::Dragging])
+        } else {
+            SplitHandleStyle::class(&[axis_modifier])
+        }
     };
 
     view! {
         <div
-            class=SplitHandleStyle::class(&[modifier])
+            class=class_sig
+            node_ref=handle_ref
             on:mousedown=on_mousedown
         >
             <div class=SplitHandleStyle::BAR />

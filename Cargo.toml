@@ -11,7 +11,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wasm-bindgen = "0.2"
 css-styled = { git = "https://github.com/ignition-is-go/css-styled.git", version = "0.1.0" }
-leptos-resize = { git = "https://github.com/ignition-is-go/leptos-resize.git", branch = "main" }
+leptos-resize-handle = "0.1.0"
 web-sys = { version = "0.3", features = [
     "DragEvent",
     "DataTransfer",
@@ -24,3 +24,5 @@ web-sys = { version = "0.3", features = [
     "Window",
     "EventTarget",
 ] }
+
+[workspace]

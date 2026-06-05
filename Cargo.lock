@@ -1083,9 +1083,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "leptos-resize"
+name = "leptos-resize-handle"
 version = "0.1.0"
-source = "git+https://github.com/ignition-is-go/leptos-resize.git?branch=main#21411406f98444bd7d4da0d770a837a6457015f9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "733f65d57a0a456963dee63989bbe3e9521a0a7ffd719ba5517f18043cc26006"
 dependencies = [
  "leptos",
  "wasm-bindgen",
@@ -1300,7 +1301,7 @@ version = "0.1.0"
 dependencies = [
  "css-styled",
  "leptos",
- "leptos-resize",
+ "leptos-resize-handle",
  "send_wrapper",
  "serde",
  "serde_json",

@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos_resize::{use_drag, Direction as LrhDirection};
+use leptos_resize_handle::{use_drag, Direction as LrhDirection};
 use send_wrapper::SendWrapper;
 use wasm_bindgen::JsCast;
 

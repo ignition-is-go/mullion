@@ -3,13 +3,14 @@ use leptos::prelude::*;
 use css_styled::{IntoCss, IntoThemeCss};
 
 use crate::activity::Category;
-use crate::context::MullionContext;
+use crate::context::{MullionContext, PaneAccessory, PaneBorderColor};
 use crate::events::PaneEvent;
 use crate::theme::MullionTheme;
 use crate::tree::{PaneData, PaneNode};
 
 use super::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
 use super::drop_overlay::DropOverlayStyle;
+use super::pane_header::HeaderStyle;
 use super::pane_view::{PaneStyle, PaneView};
 use super::split_handle::SplitHandleStyle;
 use super::workspace_switcher::WorkspaceSwitcherStyle;
@@ -56,6 +57,13 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// Optional app icon shown at the top of every activity bar.
     #[prop(optional)]
     app_icon: Option<crate::activity::ActivityIcon>,
+    /// Optional per-pane chrome rendered in each activity bar's bottom action
+    /// area (e.g. a session-color indicator/switcher). Closes over host state.
+    #[prop(optional)]
+    pane_accessory: Option<PaneAccessory>,
+    /// Optional per-pane bottom-border color (e.g. the pane's session color).
+    #[prop(optional)]
+    pane_border_color: Option<PaneBorderColor>,
     children: Children,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
@@ -64,17 +72,19 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let split_handle_style = use_context::<SplitHandleStyle>().unwrap_or_default();
     let pane_style = use_context::<PaneStyle>().unwrap_or_default();
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
+    let header_style = use_context::<HeaderStyle>().unwrap_or_default();
     let ws_style = use_context::<WorkspaceSwitcherStyle>().unwrap_or_default();
     let activity_bar_behavior = use_context::<ActivityBarBehavior>().unwrap_or_default();
 
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         theme.to_theme_css(),
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
         activity_bar_style.to_css(),
         drop_overlay_style.to_css(),
+        header_style.to_css(),
         ws_style.to_css(),
     );
 
@@ -88,8 +98,11 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         split_handle_style,
         pane_style,
         drop_overlay_style,
+        header_style,
         activity_bar_behavior,
         app_icon,
+        pane_accessory,
+        pane_border_color,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -124,6 +137,13 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// Optional app icon shown at the top of every activity bar.
     #[prop(optional)]
     app_icon: Option<crate::activity::ActivityIcon>,
+    /// Optional per-pane chrome rendered in each activity bar's bottom action
+    /// area (e.g. a session-color indicator/switcher). Closes over host state.
+    #[prop(optional)]
+    pane_accessory: Option<PaneAccessory>,
+    /// Optional per-pane bottom-border color (e.g. the pane's session color).
+    #[prop(optional)]
+    pane_border_color: Option<PaneBorderColor>,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
     let mullion_style = use_context::<MullionStyle>().unwrap_or_default();
@@ -131,17 +151,19 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let split_handle_style = use_context::<SplitHandleStyle>().unwrap_or_default();
     let pane_style = use_context::<PaneStyle>().unwrap_or_default();
     let drop_overlay_style = use_context::<DropOverlayStyle>().unwrap_or_default();
+    let header_style = use_context::<HeaderStyle>().unwrap_or_default();
     let ws_style = use_context::<WorkspaceSwitcherStyle>().unwrap_or_default();
     let activity_bar_behavior = use_context::<ActivityBarBehavior>().unwrap_or_default();
 
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         theme.to_theme_css(),
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
         activity_bar_style.to_css(),
         drop_overlay_style.to_css(),
+        header_style.to_css(),
         ws_style.to_css(),
     );
 
@@ -155,8 +177,11 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         split_handle_style,
         pane_style,
         drop_overlay_style,
+        header_style,
         activity_bar_behavior,
         app_icon,
+        pane_accessory,
+        pane_border_color,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -184,13 +209,14 @@ pub fn MullionPaneTree<D: PaneData + Send + Sync>(
     ctx: MullionContext<D>,
 ) -> impl IntoView {
     let all_css = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
         ctx.theme.to_theme_css(),
         ctx.split_handle_style.to_css(),
         ctx.pane_style.to_css(),
         ctx.mullion_style.to_css(),
         ctx.activity_bar_style.to_css(),
         ctx.drop_overlay_style.to_css(),
+        ctx.header_style.to_css(),
     );
 
     view! {

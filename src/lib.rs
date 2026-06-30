@@ -6,14 +6,15 @@ pub mod events;
 pub mod tree;
 pub mod workspace;
 
-pub use activity::{ActivityDef, ActivityIcon, Category};
+pub use activity::{ActivityDef, ActivityIcon, ActivityRender, Category};
 pub use components::mullion_root::{MullionPaneTree, MullionProvider, MullionRoot};
 pub use components::workspace_switcher::{WorkspaceSwitcher, WorkspaceSwitcherStyle, WorkspaceSwitcherModifier};
-pub use context::MullionContext;
+pub use context::{MullionContext, PaneAccessory, PaneBorderColor};
 pub use events::PaneEvent;
 pub use components::activity_bar::{ActivityBarBehavior, ActivityBarModifier, ActivityBarStyle};
 pub use components::drop_overlay::DropOverlayStyle;
 pub use components::mullion_root::MullionStyle;
+pub use components::pane_header::{HeaderStyle, PaneHeader};
 pub use components::pane_view::PaneStyle;
 pub use components::split_handle::{SplitHandleModifier, SplitHandleStyle};
 pub use theme::MullionTheme;

@@ -227,6 +227,11 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
 
     let ctx_actions = ctx.clone();
 
+    // Host-provided per-pane chrome (e.g. session indicator). Cloned out before
+    // `ctx` is moved into the activity-groups closure below.
+    let pane_accessory = ctx.pane_accessory.clone();
+    let pid_accessory = pane_id.clone();
+
     let scope_class = if ctx.activity_bar_behavior.hover_expand {
         ActivityBarStyle::SCOPE.to_string()
     } else {
@@ -344,6 +349,9 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                 </div>
                 // Pane actions (bottom)
                 <div>
+                    // Host-provided per-pane chrome (session indicator, etc.),
+                    // anchored above the split/close controls.
+                    {pane_accessory.map(move |f| f(pid_accessory.clone()))}
                     {
                         let ctx_sh = ctx_actions.clone();
                         let ctx_sv = ctx_actions.clone();

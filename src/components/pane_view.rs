@@ -177,10 +177,22 @@ fn LeafView<D: PaneData + Send + Sync>(
     let id_bar = id.clone();
     let id_content = id.clone();
     let id_drop = id.clone();
+
+    // Host-provided per-pane bottom border (e.g. session color). Reactive: the
+    // closure calls the host fn, which reads live signals, so the border tracks
+    // session changes. `box-sizing:border-box` keeps the 2px inside the pane.
+    let id_border = id.clone();
+    let border_fn = ctx.pane_border_color.clone();
+    let border_style = move || match border_fn.as_ref().and_then(|f| f(id_border.clone())) {
+        Some(color) => format!("box-sizing:border-box;border-bottom:2px solid {color};"),
+        None => String::new(),
+    };
+
     view! {
         <div
             class=PaneStyle::SCOPE
             node_ref=pane_ref
+            style=border_style
             on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id_focus.clone())); }
         >
             {
@@ -191,7 +203,7 @@ fn LeafView<D: PaneData + Send + Sync>(
                     view! { <ActivityBar pane_id=id_bar.clone() data=data ctx=ctx.clone() /> }.into_any()
                 }
             }
-            <div style="flex:1;overflow:hidden;position:relative">
+            <div style="flex:1 1 0;min-width:0;min-height:0;overflow:hidden;position:relative">
                 <PaneContent pane_id=id_content active_activity=active_activity data=data ctx=ctx.clone() />
                 <DropOverlay pane_id=id_drop ctx=ctx />
             </div>

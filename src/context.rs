@@ -9,6 +9,7 @@ use crate::events::PaneEvent;
 use crate::components::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
 use crate::components::drop_overlay::DropOverlayStyle;
 use crate::components::mullion_root::MullionStyle;
+use crate::components::pane_header::HeaderStyle;
 use crate::components::pane_view::PaneStyle;
 use crate::components::split_handle::SplitHandleStyle;
 use crate::theme::MullionTheme;
@@ -16,6 +17,23 @@ use crate::tree::{
     collect_split_ratios, find_ratio, ActivityId, CategoryId, DropEdge, PaneData, PaneId,
     PaneNode, SplitDirection,
 };
+
+/// Host-provided per-pane chrome rendered in each pane's activity bar.
+///
+/// Unlike [`crate::activity::ActivityRender`] (a bare `fn` pointer that cannot
+/// capture state), this is a boxed closure, so the host can close over app-level
+/// signals — e.g. to render a session-color indicator that resolves the pane's
+/// group/session from live server state. Called with the pane's id; returns the
+/// chrome to mount in the activity bar's bottom action area.
+pub type PaneAccessory = Arc<dyn Fn(PaneId) -> AnyView + Send + Sync>;
+
+/// Host-provided per-pane bottom-border color (e.g. the pane's session color).
+///
+/// Returns a CSS color string for the pane, or `None` for no border. Called
+/// reactively in the pane's render, so a closure that reads live signals (the
+/// pane's group/session) updates the border when the session changes. mullion
+/// owns the thickness/placement (a thin `border-bottom`); the host owns the color.
+pub type PaneBorderColor = Arc<dyn Fn(PaneId) -> Option<String> + Send + Sync>;
 
 /// The reactive store for the mullion pane system.
 ///
@@ -64,10 +82,16 @@ pub struct MullionContext<D: PaneData> {
     pub split_handle_style: SplitHandleStyle,
     pub pane_style: PaneStyle,
     pub drop_overlay_style: DropOverlayStyle,
+    pub header_style: HeaderStyle,
     /// Activity bar interaction options (resolved at provider time).
     pub activity_bar_behavior: ActivityBarBehavior,
     /// Optional app icon displayed at the top of every activity bar.
     pub app_icon: Option<ActivityIcon>,
+    /// Optional host-provided per-pane chrome rendered in the activity bar's
+    /// bottom action area (e.g. a session-color indicator/switcher).
+    pub pane_accessory: Option<PaneAccessory>,
+    /// Optional host-provided per-pane bottom-border color (e.g. session color).
+    pub pane_border_color: Option<PaneBorderColor>,
     /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
     pane_elements: Arc<Mutex<HashMap<PaneId, SendWrapper<web_sys::HtmlElement>>>>,
 }
@@ -83,8 +107,11 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         split_handle_style: SplitHandleStyle,
         pane_style: PaneStyle,
         drop_overlay_style: DropOverlayStyle,
+        header_style: HeaderStyle,
         activity_bar_behavior: ActivityBarBehavior,
         app_icon: Option<ActivityIcon>,
+        pane_accessory: Option<PaneAccessory>,
+        pane_border_color: Option<PaneBorderColor>,
     ) -> Self {
         // Flatten categories into metadata + activities with category ids
         let mut cat_metas = Vec::new();
@@ -130,8 +157,11 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             split_handle_style,
             pane_style,
             drop_overlay_style,
+            header_style,
             activity_bar_behavior,
             app_icon,
+            pane_accessory,
+            pane_border_color,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }
     }

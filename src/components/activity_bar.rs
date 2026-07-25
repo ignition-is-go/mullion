@@ -261,6 +261,9 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
 
     let icon_active_opacity = style.icon_active_opacity.clone();
     let icon_active_opacity_float = icon_active_opacity.clone();
+    // Floating activities have no category to colour their active highlight, so the
+    // selected one highlights in the theme accent (matching the categorised behaviour).
+    let float_accent = ctx.theme.accent.clone();
 
     let ctx_actions = ctx.clone();
     let ctx_float = ctx.clone();
@@ -314,7 +317,11 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                             floating.get().into_iter().map(|(act_id, name, icon)| {
                                 let is_active = current_active.as_ref() == Some(&act_id);
                                 let active_style = if is_active {
-                                    ActivityBarStyle::vars(|v| v.icon_opacity(&icon_active_opacity_float))
+                                    ActivityBarStyle::vars(|v| {
+                                        v.icon_opacity(&icon_active_opacity_float)
+                                            .icon_color(&float_accent)
+                                            .icon_stroke_color(&float_accent)
+                                    })
                                 } else {
                                     String::new()
                                 };

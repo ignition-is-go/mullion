@@ -38,10 +38,21 @@ pub fn PaneContent<D: PaneData + Send + Sync>(
     // `flex:1 1 0; min-height:0` child and is itself `position:relative`, so
     // an activity that paints with `position:absolute; inset:0` fills exactly
     // the area below the header.
+    //
+    // `isolation:isolate` makes this column its own stacking context, which is
+    // the boundary between activity content and pane chrome: whatever z-index
+    // an activity uses is resolved *inside* this box and can never compete with
+    // the chrome band (see [`crate::components::overlay`]). Note the isolate
+    // wraps the content column only — `DropOverlay` is deliberately a sibling
+    // outside it in `PaneView`, so drag chrome still paints above content.
+    //
+    // Consequence for activities: content that must escape the pane cannot do
+    // it with a bigger number any more. It has to leave the pane properly, via
+    // [`crate::MullionOverlay`].
     let pid_header = pane_id.clone();
     let ctx_header = ctx.clone();
     view! {
-        <div style="position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden">
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;isolation:isolate">
             <PaneHeader
                 pane_id=pid_header
                 resolved=resolved_activity.into()

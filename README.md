@@ -128,6 +128,73 @@ provide_context(ActivityBarBehavior {
 | `MullionProvider` | Context-only provider, render children with full layout control |
 | `MullionPaneTree` | Renders just the pane tree (use inside `MullionProvider`) |
 | `WorkspaceSwitcher` | Batteries-included workspace tab bar |
+| `MullionOverlay` | Portals content above all chrome, for modals that must escape their pane |
+
+## Stacking: chrome, content, and overlays
+
+Mullion paints its chrome in a small, fixed z-band inside the pane tree:
+
+| z-index | element |
+|---------|---------|
+| 5 | split handles |
+| 10 | activity bar panel |
+| 20 | drop overlay (drag feedback) |
+
+Activity content is confined below that band: the pane's content column is
+`isolation: isolate`, so it is its own stacking context. Whatever z-index an
+activity uses is resolved *within its own pane* — it stays meaningful relative
+to the activity's own elements, and can never compete with chrome or with
+another pane.
+
+This means an activity cannot escape its pane by picking a bigger number. Two
+consequences worth knowing:
+
+- **In-pane popovers and dropdowns are unaffected.** The pane's content slot is
+  already `overflow: hidden`, so they were always clipped to the pane.
+- **Full-screen modals, command palettes, and anything else that must cover the
+  app has to leave the pane** — use `MullionOverlay`. A `position: fixed` element
+  inside activity content still covers the viewport geometrically, but it is
+  painted inside its pane's stacking context, so a neighbouring pane's content
+  will cover it in a split layout.
+
+### MullionOverlay
+
+```rust
+use mullion::{MullionOverlay, OverlayLevel};
+
+view! {
+    <Show when=move || open.get()>
+        <MullionOverlay
+            backdrop=true
+            center=true
+            on_click_outside=Callback::new(move |_| open.set(false))
+        >
+            <MyDialog />
+        </MullionOverlay>
+    </Show>
+}
+```
+
+The first overlay to mount lazily creates a single `<div id="mullion-overlay-root">`
+on `document.body` — `position: fixed; inset: 0; z-index: var(--ml-overlay-z, 10000)`
+and `pointer-events: none`, so an idle overlay layer never eats clicks. Each
+overlay is its own stacking context inside that root, so an overlay's internal
+z-indexes keep working relative to each other without leaking.
+
+| Prop | Default | Purpose |
+|------|---------|---------|
+| `level` | `OverlayLevel::Modal` | Tier against *other* overlays: `Modal` < `Toast` < `Drag`. Every tier is above all chrome. `Drag` is reserved for mullion. |
+| `backdrop` | `false` | Dimming scrim behind the children |
+| `backdrop_color` | `var(--ml-scrim, rgba(0,0,0,0.5))` | Define `--ml-scrim` to theme every backdrop at once |
+| `center` | `false` | Center the children in the viewport |
+| `on_click_outside` | — | Click-to-dismiss. Fires only for clicks that land on the overlay's own box, so it does **not** fire if your children fill the overlay themselves (e.g. your own `inset: 0` wrapper) — use `center`, or handle dismissal yourself. |
+| `click_through` | `false` | Let pointer events reach the app behind the overlay. Content must then set `pointer-events: auto`. |
+
+Children are a `ChildrenFn`, so any captured state must be `Fn`-safe — copy
+signals in, or park non-`Copy` values in a `StoredValue`.
+
+Reactive context is preserved across the portal: `use_context`, signals, and
+effects behave exactly as they do inline.
 
 ## API
 

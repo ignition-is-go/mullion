@@ -1,0 +1,24 @@
+[channels]
+main = "production"
+
+[tasks.check]
+workspace_batchable = true
+cargo = ["cargo", "check", "--target-dir", "target/claude"]
+
+[tasks.check-wasm]
+# mullion is a Leptos CSR library — it only ever runs on wasm32, and native
+# `check` doesn't exercise the `web-sys`/`wasm-bindgen` paths that matter.
+# Treat this as the real gate, not an extra.
+workspace_batchable = true
+cargo = ["cargo", "check", "--target", "wasm32-unknown-unknown", "--target-dir", "target/claude"]
+
+[tasks.build]
+workspace_batchable = true
+cargo = ["cargo", "build"]
+
+[tasks.test]
+workspace_batchable = true
+cargo = ["cargo", "test"]
+
+[tasks.lint]
+cargo = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]

@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2021"
 description = "A Leptos library for splittable panes with activity bars"
 
+[package.metadata.flux]
+# Which flux tasks touch this crate. `publish` is deliberately absent: the
+# `mullion` name is squatted on crates.io, so this crate is consumed by path
+# or git dependency only.
+tasks = ["check", "check-wasm", "build", "test", "lint"]
+
 [dependencies]
 leptos = { version = "0.8.17", features = ["csr"] }
 send_wrapper = "0.6.0"

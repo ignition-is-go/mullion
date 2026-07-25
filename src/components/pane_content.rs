@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 
+use super::pane_header::PaneHeader;
 use crate::context::MullionContext;
 use crate::tree::{ActivityId, PaneData, PaneId};
 
@@ -29,23 +30,43 @@ pub fn PaneContent<D: PaneData + Send + Sync>(
         available.first().map(|a| a.def.id.clone())
     });
 
+    // Flex column: [header band (auto height)] + [activity body].
+    //
+    // The whole column is positioned `absolute; inset:0` so it fills the
+    // (position:relative) leaf slot with a definite size — sidestepping the
+    // "percentage height collapses to 0 in a flex child" trap. The body is a
+    // `flex:1 1 0; min-height:0` child and is itself `position:relative`, so
+    // an activity that paints with `position:absolute; inset:0` fills exactly
+    // the area below the header.
+    let pid_header = pane_id.clone();
+    let ctx_header = ctx.clone();
     view! {
-        {
-            let pane_id = pane_id.clone();
-            move || {
-            let act_id = resolved_activity.get();
-            match act_id {
-                Some(id) => {
-                    let render_fn = ctx.activities.with_value(|acts| {
-                        acts.iter().find(|a| a.def.id == id).map(|a| a.def.render)
-                    });
-                    match render_fn {
-                        Some(render) => render(pane_id.clone(), data),
-                        None => view! { <div>"Activity not found"</div> }.into_any(),
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden">
+            <PaneHeader
+                pane_id=pid_header
+                resolved=resolved_activity.into()
+                data=data
+                ctx=ctx_header
+            />
+            <div style="flex:1 1 0;position:relative;min-height:0;overflow:hidden">
+                {
+                    let pane_id = pane_id.clone();
+                    move || {
+                    let act_id = resolved_activity.get();
+                    match act_id {
+                        Some(id) => {
+                            let render_fn = ctx.activities.with_value(|acts| {
+                                acts.iter().find(|a| a.def.id == id).map(|a| a.def.render)
+                            });
+                            match render_fn {
+                                Some(render) => render(pane_id.clone(), data),
+                                None => view! { <div>"Activity not found"</div> }.into_any(),
+                            }
+                        }
+                        None => view! { <div></div> }.into_any(),
                     }
-                }
-                None => view! { <div></div> }.into_any(),
-            }
-        }}
+                }}
+            </div>
+        </div>
     }
 }

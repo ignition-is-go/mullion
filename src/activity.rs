@@ -49,7 +49,16 @@ pub enum ActivityIcon {
     Url(String),
 }
 
+/// Renders content for a specific pane, given its id and a reactive slice of
+/// its data. Used for both an activity's body ([`ActivityDef::render`]) and its
+/// optional header content ([`ActivityDef::header`]).
+pub type ActivityRender<D> = fn(PaneId, Signal<D>) -> AnyView;
+
 /// Definition of an activity, registered at startup by the consuming app.
+///
+/// Construct with a struct literal, or use [`ActivityDef::new`] +
+/// [`ActivityDef::with_header`] — the builder form is forward-compatible with
+/// future optional fields, so it won't break when this struct grows.
 pub struct ActivityDef<D: PaneData> {
     pub id: ActivityId,
     pub name: String,
@@ -60,7 +69,39 @@ pub struct ActivityDef<D: PaneData> {
     ///
     /// The `Signal<D>` fires only when *this* pane's data changes — not
     /// when other panes update or when the tree structure shifts.
-    pub render: fn(PaneId, Signal<D>) -> AnyView,
+    pub render: ActivityRender<D>,
+    /// Optional custom content rendered in the pane header band, beside the
+    /// activity's name. Receives the same `(PaneId, Signal<D>)` as `render`,
+    /// so it can react to this pane's data (e.g. show the current scene's
+    /// name). `None` ⇒ the header band shows just the activity name.
+    pub header: Option<ActivityRender<D>>,
+}
+
+impl<D: PaneData> ActivityDef<D> {
+    /// Create an activity with no custom header content (the header band shows
+    /// just `name`). Add custom content with [`ActivityDef::with_header`].
+    pub fn new(
+        id: ActivityId,
+        name: impl Into<String>,
+        icon: ActivityIcon,
+        filter: fn(&D) -> bool,
+        render: ActivityRender<D>,
+    ) -> Self {
+        ActivityDef {
+            id,
+            name: name.into(),
+            icon,
+            filter,
+            render,
+            header: None,
+        }
+    }
+
+    /// Set custom header content rendered beside the activity name.
+    pub fn with_header(mut self, header: ActivityRender<D>) -> Self {
+        self.header = Some(header);
+        self
+    }
 }
 
 impl<D: PaneData> Clone for ActivityDef<D> {
@@ -71,6 +112,7 @@ impl<D: PaneData> Clone for ActivityDef<D> {
             icon: self.icon.clone(),
             filter: self.filter,
             render: self.render,
+            header: self.header,
         }
     }
 }

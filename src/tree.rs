@@ -138,10 +138,18 @@ impl<D: PaneData> PaneNode<D> {
         new_id: PaneId,
         new_data: D,
     ) -> bool {
-        if let PaneNode::Leaf { id, active_activity, .. } = self {
+        if let PaneNode::Leaf {
+            id,
+            active_activity,
+            ..
+        } = self
+        {
             if id == target {
                 let inherit_activity = active_activity.clone();
-                let original = std::mem::replace(self, PaneNode::leaf(PaneId::new("__temp__"), new_data.clone()));
+                let original = std::mem::replace(
+                    self,
+                    PaneNode::leaf(PaneId::new("__temp__"), new_data.clone()),
+                );
                 let new_leaf = PaneNode::Leaf {
                     id: new_id,
                     active_activity: inherit_activity,
@@ -202,7 +210,12 @@ impl<D: PaneData> PaneNode<D> {
     /// Change the split direction of the immediate parent of `target`.
     pub fn change_direction(&mut self, target: &PaneId, new_direction: SplitDirection) -> bool {
         match self {
-            PaneNode::Split { direction, first, second, .. } => {
+            PaneNode::Split {
+                direction,
+                first,
+                second,
+                ..
+            } => {
                 let first_contains = first.contains(target);
                 let second_contains = second.contains(target);
                 if first_contains || second_contains {
@@ -244,7 +257,12 @@ impl<D: PaneData> PaneNode<D> {
         }
         let clamped = new_ratio.clamp(0.1, 0.9);
         match self {
-            PaneNode::Split { ratio, first, second, .. } => {
+            PaneNode::Split {
+                ratio,
+                first,
+                second,
+                ..
+            } => {
                 if second.leftmost_leaf_id() == split_key {
                     *ratio = clamped;
                     return true;
@@ -262,9 +280,12 @@ impl<D: PaneData> PaneNode<D> {
             return false;
         }
         let source_leaf = match self.find(source) {
-            Some(PaneNode::Leaf { id, data, active_activity, .. }) => {
-                (id.clone(), data.clone(), active_activity.clone())
-            }
+            Some(PaneNode::Leaf {
+                id,
+                data,
+                active_activity,
+                ..
+            }) => (id.clone(), data.clone(), active_activity.clone()),
             _ => return false,
         };
         if self.close(source).is_none() {
@@ -272,7 +293,10 @@ impl<D: PaneData> PaneNode<D> {
         }
         if let Some(dest_node) = self.find_mut(destination) {
             let direction = edge.split_direction();
-            let original = std::mem::replace(dest_node, PaneNode::leaf(PaneId::new("__temp__"), source_leaf.1.clone()));
+            let original = std::mem::replace(
+                dest_node,
+                PaneNode::leaf(PaneId::new("__temp__"), source_leaf.1.clone()),
+            );
             let new_leaf = PaneNode::Leaf {
                 id: source_leaf.0,
                 active_activity: source_leaf.2,
@@ -407,7 +431,10 @@ mod tests {
         let mut t = sample();
         let ids_before = t.leaf_ids();
         let keys_before = collect_split_keys(&t);
-        if let Some(PaneNode::Leaf { active_activity, .. }) = t.find_mut(&PaneId::new("a")) {
+        if let Some(PaneNode::Leaf {
+            active_activity, ..
+        }) = t.find_mut(&PaneId::new("a"))
+        {
             *active_activity = Some(ActivityId::new("foo"));
         }
         assert_eq!(t.leaf_ids(), ids_before);
@@ -553,15 +580,26 @@ mod tests {
             }),
         };
         let read = |_: &PaneId| 0.25; // unused because we'll use tree ratios
-        // Actually use the tree's stored ratios via a closure
+                                      // Actually use the tree's stored ratios via a closure
         let read_from_tree = |k: &PaneId| {
             let mut out = Vec::new();
             collect_split_ratios(&t, &mut out);
-            out.iter().find(|(key, _)| key == k).map(|(_, r)| *r).unwrap_or(0.5)
+            out.iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, r)| *r)
+                .unwrap_or(0.5)
         };
 
         let sidebar_rect = leaf_rect(&t, &PaneId::new("sidebar"), read_from_tree).unwrap();
-        assert_eq!(sidebar_rect, Rect { left: 0.0, top: 0.0, width: 0.25, height: 1.0 });
+        assert_eq!(
+            sidebar_rect,
+            Rect {
+                left: 0.0,
+                top: 0.0,
+                width: 0.25,
+                height: 1.0
+            }
+        );
 
         let top_rect = leaf_rect(&t, &PaneId::new("main-top"), read_from_tree).unwrap();
         assert!((top_rect.left - 0.25).abs() < 1e-9);
@@ -594,7 +632,10 @@ mod tests {
         let read_from_tree = |k: &PaneId| {
             let mut out = Vec::new();
             collect_split_ratios(&t, &mut out);
-            out.iter().find(|(key, _)| key == k).map(|(_, r)| *r).unwrap_or(0.5)
+            out.iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, r)| *r)
+                .unwrap_or(0.5)
         };
 
         // Outer split is at the root — parent rect is FULL.
@@ -856,10 +897,7 @@ pub(crate) fn find_split_direction<D: PaneData>(
 
 /// Walk the tree collecting `(split_key, ratio)` for every split, where
 /// `split_key` is the first leaf id under the split's `second` subtree.
-pub(crate) fn collect_split_ratios<D: PaneData>(
-    node: &PaneNode<D>,
-    out: &mut Vec<(PaneId, f64)>,
-) {
+pub(crate) fn collect_split_ratios<D: PaneData>(node: &PaneNode<D>, out: &mut Vec<(PaneId, f64)>) {
     if let PaneNode::Split {
         ratio,
         first,

@@ -4,8 +4,8 @@ use leptos_resize_handle::{use_drag, Direction as LrhDirection};
 use crate::context::MullionContext;
 use crate::theme::MullionTheme;
 use crate::tree::{
-    collect_split_keys, find_split_direction, leaf_rect, split_parent_rect, ActivityId,
-    PaneData, PaneId, PaneNode, Rect, SplitDirection,
+    collect_split_keys, find_split_direction, leaf_rect, split_parent_rect, ActivityId, PaneData,
+    PaneId, PaneNode, Rect, SplitDirection,
 };
 
 /// Style for leaf panes, powered by css-styled.
@@ -56,9 +56,7 @@ use super::split_handle::{SplitHandleModifier, SplitHandleStyle};
 /// - Each leaf's `data` and `active_activity` memos read only the matching
 ///   leaf's fields, so mutations to other leaves don't re-render this one.
 #[component]
-pub fn PaneView<D: PaneData + Send + Sync>(
-    ctx: MullionContext<D>,
-) -> impl IntoView {
+pub fn PaneView<D: PaneData + Send + Sync>(ctx: MullionContext<D>) -> impl IntoView {
     let ctx_leaves = ctx.clone();
     let leaves = Memo::new(move |_| ctx_leaves.tree.with(|t| t.leaf_ids()));
 
@@ -96,17 +94,16 @@ pub fn PaneView<D: PaneData + Send + Sync>(
 }
 
 #[component]
-fn LeafSlot<D: PaneData + Send + Sync>(
-    id: PaneId,
-    ctx: MullionContext<D>,
-) -> impl IntoView {
+fn LeafSlot<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> impl IntoView {
     let id_rect = id.clone();
     let ctx_rect = ctx.clone();
     let rect = Memo::new(move |prev: Option<&Rect>| {
         ctx_rect.tree.with(|tree| {
             let ctx_for_ratio = ctx_rect.clone();
-            leaf_rect(tree, &id_rect, move |key| ctx_for_ratio.ratio_signal(key).get())
-                .unwrap_or_else(|| prev.copied().unwrap_or(Rect::FULL))
+            leaf_rect(tree, &id_rect, move |key| {
+                ctx_for_ratio.ratio_signal(key).get()
+            })
+            .unwrap_or_else(|| prev.copied().unwrap_or(Rect::FULL))
         })
     });
 
@@ -129,10 +126,7 @@ fn LeafSlot<D: PaneData + Send + Sync>(
 }
 
 #[component]
-fn LeafView<D: PaneData + Send + Sync>(
-    id: PaneId,
-    ctx: MullionContext<D>,
-) -> impl IntoView {
+fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> impl IntoView {
     // Per-leaf reactive slices of the tree. Each Memo fires only when the
     // specific leaf's field changes (PartialEq dedup).
     //
@@ -157,7 +151,9 @@ fn LeafView<D: PaneData + Send + Sync>(
     let ctx_act = ctx.clone();
     let activity_memo = Memo::new(move |prev: Option<&Option<ActivityId>>| {
         ctx_act.tree.with(|t| match t.find(&id_act) {
-            Some(PaneNode::Leaf { active_activity, .. }) => active_activity.clone(),
+            Some(PaneNode::Leaf {
+                active_activity, ..
+            }) => active_activity.clone(),
             _ => prev.cloned().unwrap_or(None),
         })
     });
@@ -236,8 +232,10 @@ fn SplitHandleSlot<D: PaneData + Send + Sync>(
     let parent_rect = Memo::new(move |prev: Option<&Rect>| {
         ctx_rect.tree.with(|tree| {
             let ctx_for_ratio = ctx_rect.clone();
-            split_parent_rect(tree, &key_rect, move |key| ctx_for_ratio.ratio_signal(key).get())
-                .unwrap_or_else(|| prev.copied().unwrap_or(Rect::FULL))
+            split_parent_rect(tree, &key_rect, move |key| {
+                ctx_for_ratio.ratio_signal(key).get()
+            })
+            .unwrap_or_else(|| prev.copied().unwrap_or(Rect::FULL))
         })
     });
 

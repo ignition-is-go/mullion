@@ -51,14 +51,17 @@ pub fn PaneContent<D: PaneData + Send + Sync>(
     // [`crate::MullionOverlay`].
     let pid_header = pane_id.clone();
     let ctx_header = ctx.clone();
+    let show_header = ctx.show_pane_header;
     view! {
         <div style="position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;isolation:isolate">
-            <PaneHeader
-                pane_id=pid_header
-                resolved=resolved_activity.into()
-                data=data
-                ctx=ctx_header
-            />
+            {show_header.then(|| view! {
+                <PaneHeader
+                    pane_id=pid_header
+                    resolved=resolved_activity.into()
+                    data=data
+                    ctx=ctx_header
+                />
+            })}
             <div style="flex:1 1 0;position:relative;min-height:0;overflow:hidden">
                 {
                     let pane_id = pane_id.clone();

@@ -4,18 +4,18 @@ use std::sync::{Arc, Mutex};
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 
-use crate::activity::{ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
-use crate::events::PaneEvent;
+use crate::activity::{ActivityDef, ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
 use crate::components::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
 use crate::components::drop_overlay::DropOverlayStyle;
 use crate::components::mullion_root::MullionStyle;
 use crate::components::pane_header::HeaderStyle;
 use crate::components::pane_view::PaneStyle;
 use crate::components::split_handle::SplitHandleStyle;
+use crate::events::PaneEvent;
 use crate::theme::MullionTheme;
 use crate::tree::{
-    collect_split_ratios, find_ratio, ActivityId, CategoryId, DropEdge, PaneData, PaneId,
-    PaneNode, SplitDirection,
+    collect_split_ratios, find_ratio, ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode,
+    SplitDirection,
 };
 
 /// Host-provided per-pane chrome rendered in each pane's activity bar.
@@ -92,14 +92,20 @@ pub struct MullionContext<D: PaneData> {
     pub pane_accessory: Option<PaneAccessory>,
     /// Optional host-provided per-pane bottom-border color (e.g. session color).
     pub pane_border_color: Option<PaneBorderColor>,
+    /// Whether each pane renders its header band (the active activity's title).
+    /// `false` suppresses it entirely — useful when the host drives navigation
+    /// itself and the title is redundant. Defaults to `true`.
+    pub show_pane_header: bool,
     /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
     pane_elements: Arc<Mutex<HashMap<PaneId, SendWrapper<web_sys::HtmlElement>>>>,
 }
 
 impl<D: PaneData + Send + Sync> MullionContext<D> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         initial_tree: PaneNode<D>,
         categories: Vec<Category<D>>,
+        floating_activities: Vec<ActivityDef<D>>,
         event_handler: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
         theme: MullionTheme,
         mullion_style: MullionStyle,
@@ -112,8 +118,10 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         app_icon: Option<ActivityIcon>,
         pane_accessory: Option<PaneAccessory>,
         pane_border_color: Option<PaneBorderColor>,
+        show_pane_header: bool,
     ) -> Self {
-        // Flatten categories into metadata + activities with category ids
+        // Flatten categories into metadata + activities with category ids. Floating
+        // activities (registered outside any category) carry `category: None`.
         let mut cat_metas = Vec::new();
         let mut all_activities = Vec::new();
 
@@ -128,9 +136,15 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             for act in cat.activities {
                 all_activities.push(ActivityWithCategory {
                     def: act,
-                    category: cat_metas.last().unwrap().id.clone(),
+                    category: Some(cat_metas.last().unwrap().id.clone()),
                 });
             }
+        }
+        for act in floating_activities {
+            all_activities.push(ActivityWithCategory {
+                def: act,
+                category: None,
+            });
         }
 
         cat_metas.sort_by_key(|c| c.order);
@@ -162,6 +176,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             app_icon,
             pane_accessory,
             pane_border_color,
+            show_pane_header,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -315,7 +330,10 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         self.tree.update(|tree| {
             tree.change_direction(pane, direction);
         });
-        self.emit(PaneEvent::DirectionChanged { pane: pane.clone(), direction });
+        self.emit(PaneEvent::DirectionChanged {
+            pane: pane.clone(),
+            direction,
+        });
         self.emit_tree_changed();
     }
 
@@ -347,7 +365,10 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
                 *active_activity = act_clone;
             }
         });
-        self.emit(PaneEvent::ActivityChanged { pane: pane.clone(), activity });
+        self.emit(PaneEvent::ActivityChanged {
+            pane: pane.clone(),
+            activity,
+        });
         self.emit_tree_changed();
     }
 
@@ -367,12 +388,13 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         self.categories.with_value(|cats| cats.clone())
     }
 
-    /// Look up an activity's category id.
+    /// Look up an activity's category id. `None` for a floating activity (or an
+    /// unknown id).
     pub fn activity_category(&self, activity_id: &ActivityId) -> Option<CategoryId> {
         self.activities.with_value(|acts| {
             acts.iter()
                 .find(|a| a.def.id == *activity_id)
-                .map(|a| a.category.clone())
+                .and_then(|a| a.category.clone())
         })
     }
 
@@ -388,11 +410,9 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
 
     /// Get a pane's current data.
     pub fn pane_data(&self, pane: &PaneId) -> Option<D> {
-        self.tree.with_untracked(|tree| {
-            match tree.find(pane) {
-                Some(PaneNode::Leaf { data, .. }) => Some(data.clone()),
-                _ => None,
-            }
+        self.tree.with_untracked(|tree| match tree.find(pane) {
+            Some(PaneNode::Leaf { data, .. }) => Some(data.clone()),
+            _ => None,
         })
     }
 
@@ -411,17 +431,28 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
 
     /// Register a pane's DOM element (called internally by PaneView on mount).
     pub(crate) fn register_pane_element(&self, id: PaneId, el: web_sys::HtmlElement) {
-        self.pane_elements.lock().unwrap().insert(id, SendWrapper::new(el));
+        self.pane_elements
+            .lock()
+            .unwrap()
+            .insert(id, SendWrapper::new(el));
     }
 
     /// Get the DOM element for a pane. Use this to position overlays,
     /// tooltips, or anything relative to a specific pane.
     pub fn pane_element(&self, id: PaneId) -> Option<web_sys::HtmlElement> {
-        self.pane_elements.lock().unwrap().get(&id).map(|w| w.clone().take())
+        self.pane_elements
+            .lock()
+            .unwrap()
+            .get(&id)
+            .map(|w| w.clone().take())
     }
 
     /// Get the bounding rect for a pane.
     pub fn pane_rect(&self, id: PaneId) -> Option<web_sys::DomRect> {
-        self.pane_elements.lock().unwrap().get(&id).map(|el| el.get_bounding_client_rect())
+        self.pane_elements
+            .lock()
+            .unwrap()
+            .get(&id)
+            .map(|el| el.get_bounding_client_rect())
     }
 }

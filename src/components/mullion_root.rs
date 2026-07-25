@@ -64,6 +64,14 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
+    /// Activities registered outside any category — rendered as top-level icons
+    /// in every activity bar, above the categories. Default: none.
+    #[prop(optional)]
+    floating_activities: Vec<crate::activity::ActivityDef<D>>,
+    /// Whether panes render their header band (the active activity's title).
+    /// Default: `true`.
+    #[prop(default = true)]
+    show_pane_header: bool,
     children: Children,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
@@ -91,6 +99,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let ctx = MullionContext::new(
         initial_tree,
         categories,
+        floating_activities,
         on_event,
         theme,
         mullion_style,
@@ -103,6 +112,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         app_icon,
         pane_accessory,
         pane_border_color,
+        show_pane_header,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -144,6 +154,14 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
+    /// Activities registered outside any category — rendered as top-level icons
+    /// in every activity bar, above the categories. Default: none.
+    #[prop(optional)]
+    floating_activities: Vec<crate::activity::ActivityDef<D>>,
+    /// Whether panes render their header band (the active activity's title).
+    /// Default: `true`.
+    #[prop(default = true)]
+    show_pane_header: bool,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
     let mullion_style = use_context::<MullionStyle>().unwrap_or_default();
@@ -170,6 +188,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let ctx = MullionContext::new(
         initial_tree,
         categories,
+        floating_activities,
         on_event,
         theme,
         mullion_style,
@@ -182,6 +201,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         app_icon,
         pane_accessory,
         pane_border_color,
+        show_pane_header,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -205,9 +225,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
 
 /// Renders just the pane tree from a `MullionContext`.
 #[component]
-pub fn MullionPaneTree<D: PaneData + Send + Sync>(
-    ctx: MullionContext<D>,
-) -> impl IntoView {
+pub fn MullionPaneTree<D: PaneData + Send + Sync>(ctx: MullionContext<D>) -> impl IntoView {
     let all_css = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}",
         ctx.theme.to_theme_css(),

@@ -25,11 +25,19 @@ pub struct ActivityBarBehavior {
     /// useful when labels would overflow surrounding UI, or when the host
     /// app wants a purely icon-driven bar.
     pub hover_expand: bool,
+    /// When `true`, the activity bar hides itself off the pane's left edge and
+    /// slides in only when the cursor is over that edge — so a pane's content
+    /// (e.g. a video feed) is unobstructed until you reach for the bar. Default
+    /// `false` (the bar is always visible).
+    pub auto_hide: bool,
 }
 
 impl Default for ActivityBarBehavior {
     fn default() -> Self {
-        Self { hover_expand: true }
+        Self {
+            hover_expand: true,
+            auto_hide: false,
+        }
     }
 }
 
@@ -50,7 +58,7 @@ impl Default for ActivityBarBehavior {
     cat_border = "mullion-ab-cat-border",
     icon = "mullion-ab-icon"
 ))]
-#[component(modifier(collapsed))]
+#[component(modifier(collapsed, auto_hide))]
 #[component(internals(ActivityBarInternal))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
@@ -107,11 +115,23 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 scrollbar-width: none;
                 width: var(--ab-width);
                 padding-right: 0;
-                transition: width 0.15s ease, padding-right 0.15s ease;
+                transition: width 0.15s ease, padding-right 0.15s ease, transform 0.15s ease;
             }
             SCOPE:not(.COLLAPSED):hover PANEL {
                 width: var(--ab-expanded-width);
                 padding-right: var(--ab-expanded-padding);
+            }
+            /* Auto-hide: the bar reserves no space and its panel sits off the left
+               edge, peeking a few px; hovering that edge slides it fully in over the
+               pane content. */
+            SCOPE.AUTO_HIDE {
+                width: 0;
+            }
+            SCOPE.AUTO_HIDE PANEL {
+                transform: translateX(calc(-100% + 6px));
+            }
+            SCOPE.AUTO_HIDE:hover PANEL {
+                transform: translateX(0);
             }
             LABEL {
                 display: none;
@@ -274,10 +294,19 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     let pane_accessory = ctx.pane_accessory.clone();
     let pid_accessory = pane_id.clone();
 
-    let scope_class = if ctx.activity_bar_behavior.hover_expand {
-        ActivityBarStyle::SCOPE.to_string()
-    } else {
-        ActivityBarStyle::class(&[ActivityBarModifier::Collapsed])
+    let scope_class = {
+        let mut mods = Vec::new();
+        if !ctx.activity_bar_behavior.hover_expand {
+            mods.push(ActivityBarModifier::Collapsed);
+        }
+        if ctx.activity_bar_behavior.auto_hide {
+            mods.push(ActivityBarModifier::AutoHide);
+        }
+        if mods.is_empty() {
+            ActivityBarStyle::SCOPE.to_string()
+        } else {
+            ActivityBarStyle::class(&mods)
+        }
     };
 
     view! {

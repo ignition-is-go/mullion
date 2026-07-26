@@ -173,6 +173,16 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
     let id_bar = id.clone();
     let id_content = id.clone();
     let id_drop = id.clone();
+    let id_hover = id.clone();
+    let ctx_hover = ctx.clone();
+
+    // Does this pane hide its activity bar? (Role is stable for a pane's lifetime,
+    // so evaluate the host predicate once, untracked.)
+    let hide_bar = ctx
+        .hide_activity_bar
+        .as_ref()
+        .map(|f| data.with_untracked(|d| f(d)))
+        .unwrap_or(false);
 
     // Host-provided per-pane bottom border (e.g. session color). Reactive: the
     // closure calls the host fn, which reads live signals, so the border tracks
@@ -191,18 +201,82 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
             style=border_style
             on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id_focus.clone())); }
         >
-            {
+            {(!hide_bar).then(|| {
                 let app_icon = ctx.app_icon.clone();
                 if let Some(icon) = app_icon {
                     view! { <ActivityBar pane_id=id_bar.clone() data=data ctx=ctx.clone() app_icon=icon /> }.into_any()
                 } else {
                     view! { <ActivityBar pane_id=id_bar.clone() data=data ctx=ctx.clone() /> }.into_any()
                 }
-            }
+            })}
             <div style="flex:1 1 0;min-width:0;min-height:0;overflow:hidden;position:relative">
                 <PaneContent pane_id=id_content active_activity=active_activity data=data ctx=ctx.clone() />
                 <DropOverlay pane_id=id_drop ctx=ctx />
+                {hide_bar.then(|| view! { <PaneHoverControls pane_id=id_hover data=data ctx=ctx_hover /> })}
             </div>
+        </div>
+    }
+}
+
+const HC_SPLIT_H: &str = r#"<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 2h5.5v12H2V2zm6.5 12V2H14v12H8.5z"/></svg>"#;
+const HC_SPLIT_V: &str = r#"<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 2h12v5.5H2V2zm0 6.5h12V14H2V8.5z"/></svg>"#;
+const HC_CLOSE: &str = r#"<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 8.707l3.646 3.647.708-.707L8.707 8l3.647-3.646-.707-.708L8 7.293 4.354 3.646l-.707.708L7.293 8l-3.646 3.646.707.708L8 8.707z"/></svg>"#;
+
+/// The management strip for a bar-less pane: split / close / drag-move, revealed on
+/// hover (reuses the pane's `focused_pane` tracking). Keeps a hidden-bar pane fully
+/// manageable even though it has no activity bar.
+#[component]
+fn PaneHoverControls<D: PaneData + Send + Sync>(
+    pane_id: PaneId,
+    data: Signal<D>,
+    ctx: MullionContext<D>,
+) -> impl IntoView {
+    let focused = ctx.focused_pane;
+    let pid_vis = pane_id.clone();
+    let visible = Memo::new(move |_| focused.get().as_ref() == Some(&pid_vis));
+
+    let ctx_h = ctx.clone();
+    let ctx_v = ctx.clone();
+    let ctx_c = ctx.clone();
+    let ctx_d = ctx.clone();
+    let ctx_de = ctx.clone();
+    let pid_h = pane_id.clone();
+    let pid_v = pane_id.clone();
+    let pid_c = pane_id.clone();
+    let pid_d = pane_id.clone();
+
+    let wrap = move || {
+        format!(
+            "position:absolute;top:6px;right:6px;z-index:16;display:flex;gap:2px;padding:2px;\
+             border-radius:6px;background:var(--ml-surface);border:1px solid var(--ml-border);\
+             opacity:{};pointer-events:{};transition:opacity .12s;",
+            if visible.get() { "0.95" } else { "0" },
+            if visible.get() { "auto" } else { "none" },
+        )
+    };
+    let btn = "display:flex;align-items:center;justify-content:center;width:22px;height:22px;\
+               padding:0;border:none;background:transparent;color:var(--ml-text);cursor:pointer;\
+               border-radius:4px;opacity:0.75;";
+    let fresh_id = || PaneId::new(format!("{:.0}", web_sys::js_sys::Math::random() * 1e12));
+
+    view! {
+        <div style=wrap>
+            <div title="Move pane" draggable="true" style=format!("{btn}cursor:grab;font-size:13px;")
+                on:dragstart=move |ev| {
+                    ctx_d.dragging_pane.set(Some(pid_d.clone()));
+                    if let Some(dt) = ev.data_transfer() {
+                        let _ = dt.set_data("text/plain", &pid_d.0);
+                        dt.set_effect_allowed("move");
+                    }
+                }
+                on:dragend=move |_| ctx_de.dragging_pane.set(None)
+            >"⠿"</div>
+            <button title="Split horizontal" style=btn inner_html=HC_SPLIT_H
+                on:click=move |_| { ctx_h.split_pane(&pid_h, SplitDirection::Horizontal, fresh_id(), data.get_untracked()); } />
+            <button title="Split vertical" style=btn inner_html=HC_SPLIT_V
+                on:click=move |_| { ctx_v.split_pane(&pid_v, SplitDirection::Vertical, fresh_id(), data.get_untracked()); } />
+            <button title="Close pane" style=btn inner_html=HC_CLOSE
+                on:click=move |_| { ctx_c.close_pane(&pid_c); } />
         </div>
     }
 }

@@ -35,6 +35,13 @@ pub type PaneAccessory = Arc<dyn Fn(PaneId) -> AnyView + Send + Sync>;
 /// owns the thickness/placement (a thin `border-bottom`); the host owns the color.
 pub type PaneBorderColor = Arc<dyn Fn(PaneId) -> Option<String> + Send + Sync>;
 
+/// Host predicate deciding whether a pane hides its activity bar, given the pane's
+/// data. A pane with a hidden bar shows its content full-width and gets a small
+/// hover-revealed control strip (split / close / move) instead, so it stays
+/// manageable — useful for a pane dedicated to one thing (e.g. a video feed) whose
+/// single-icon bar is just noise.
+pub type PaneHideActivityBar<D> = Arc<dyn Fn(&D) -> bool + Send + Sync>;
+
 /// The reactive store for the mullion pane system.
 ///
 /// Provided via Leptos context at `<MullionRoot>`. The consuming app interacts
@@ -96,6 +103,10 @@ pub struct MullionContext<D: PaneData> {
     /// `false` suppresses it entirely — useful when the host drives navigation
     /// itself and the title is redundant. Defaults to `true`.
     pub show_pane_header: bool,
+    /// Optional host predicate: panes for which it returns `true` hide their
+    /// activity bar (and get hover controls instead). `None` = every pane keeps
+    /// its bar.
+    pub hide_activity_bar: Option<PaneHideActivityBar<D>>,
     /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
     pane_elements: Arc<Mutex<HashMap<PaneId, SendWrapper<web_sys::HtmlElement>>>>,
 }
@@ -119,6 +130,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         pane_accessory: Option<PaneAccessory>,
         pane_border_color: Option<PaneBorderColor>,
         show_pane_header: bool,
+        hide_activity_bar: Option<PaneHideActivityBar<D>>,
     ) -> Self {
         // Flatten categories into metadata + activities with category ids. Floating
         // activities (registered outside any category) carry `category: None`.
@@ -177,6 +189,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             pane_accessory,
             pane_border_color,
             show_pane_header,
+            hide_activity_bar,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }
     }

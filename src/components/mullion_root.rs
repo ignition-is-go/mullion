@@ -72,6 +72,10 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// Default: `true`.
     #[prop(default = true)]
     show_pane_header: bool,
+    /// Optional predicate: panes for which it returns `true` hide their activity
+    /// bar (getting hover controls instead). Default: every pane keeps its bar.
+    #[prop(optional)]
+    hide_activity_bar: Option<crate::context::PaneHideActivityBar<D>>,
     children: Children,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
@@ -113,6 +117,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         pane_accessory,
         pane_border_color,
         show_pane_header,
+        hide_activity_bar,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -162,6 +167,10 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// Default: `true`.
     #[prop(default = true)]
     show_pane_header: bool,
+    /// Optional predicate: panes for which it returns `true` hide their activity
+    /// bar (getting hover controls instead). Default: every pane keeps its bar.
+    #[prop(optional)]
+    hide_activity_bar: Option<crate::context::PaneHideActivityBar<D>>,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
     let mullion_style = use_context::<MullionStyle>().unwrap_or_default();
@@ -202,6 +211,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         pane_accessory,
         pane_border_color,
         show_pane_header,
+        hide_activity_bar,
     );
 
     if let Some(upstream_sig) = upstream {

@@ -18,7 +18,7 @@ pub use components::split_handle::{SplitHandleModifier, SplitHandleStyle};
 pub use components::workspace_switcher::{
     WorkspaceSwitcher, WorkspaceSwitcherModifier, WorkspaceSwitcherStyle,
 };
-pub use context::{MullionContext, PaneAccessory, PaneBorderColor};
+pub use context::{MullionContext, PaneAccessory, PaneBorderColor, PaneHideActivityBar};
 pub use events::PaneEvent;
 pub use theme::MullionTheme;
 pub use tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};

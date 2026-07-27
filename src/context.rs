@@ -42,6 +42,15 @@ pub type PaneBorderColor = Arc<dyn Fn(PaneId) -> Option<String> + Send + Sync>;
 /// single-icon bar is just noise.
 pub type PaneHideActivityBar<D> = Arc<dyn Fn(&D) -> bool + Send + Sync>;
 
+/// Host predicate deciding whether a pane *auto-hides* its activity bar, given the
+/// pane's data. A pane matching this keeps its full activity bar (unlike
+/// [`PaneHideActivityBar`]) but tucks it off the pane's left edge; the bar is
+/// invisible until the cursor reaches that edge, then slides in over the content
+/// as an overlay — so a pane dedicated to one visual (e.g. a video feed) is
+/// unobstructed until you reach for the bar. `None` = every pane keeps a pinned,
+/// always-visible bar.
+pub type PaneAutoHideActivityBar<D> = Arc<dyn Fn(&D) -> bool + Send + Sync>;
+
 /// The reactive store for the mullion pane system.
 ///
 /// Provided via Leptos context at `<MullionRoot>`. The consuming app interacts
@@ -107,6 +116,10 @@ pub struct MullionContext<D: PaneData> {
     /// activity bar (and get hover controls instead). `None` = every pane keeps
     /// its bar.
     pub hide_activity_bar: Option<PaneHideActivityBar<D>>,
+    /// Optional host predicate: panes for which it returns `true` auto-hide their
+    /// activity bar (kept, but tucked off the left edge and revealed on edge-hover).
+    /// `None` = every pane's bar is pinned/always-visible.
+    pub auto_hide_activity_bar: Option<PaneAutoHideActivityBar<D>>,
     /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
     pane_elements: Arc<Mutex<HashMap<PaneId, SendWrapper<web_sys::HtmlElement>>>>,
 }
@@ -131,6 +144,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         pane_border_color: Option<PaneBorderColor>,
         show_pane_header: bool,
         hide_activity_bar: Option<PaneHideActivityBar<D>>,
+        auto_hide_activity_bar: Option<PaneAutoHideActivityBar<D>>,
     ) -> Self {
         // Flatten categories into metadata + activities with category ids. Floating
         // activities (registered outside any category) carry `category: None`.
@@ -190,6 +204,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             pane_border_color,
             show_pane_header,
             hide_activity_bar,
+            auto_hide_activity_bar,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }
     }

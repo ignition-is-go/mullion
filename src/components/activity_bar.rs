@@ -24,20 +24,15 @@ pub struct ActivityBarBehavior {
     /// activity labels. Set to `false` to pin it at its collapsed width —
     /// useful when labels would overflow surrounding UI, or when the host
     /// app wants a purely icon-driven bar.
+    ///
+    /// Auto-hiding a bar off the pane edge is a *per-pane* decision, not a
+    /// global one — see [`crate::context::PaneAutoHideActivityBar`].
     pub hover_expand: bool,
-    /// When `true`, the activity bar hides itself off the pane's left edge and
-    /// slides in only when the cursor is over that edge — so a pane's content
-    /// (e.g. a video feed) is unobstructed until you reach for the bar. Default
-    /// `false` (the bar is always visible).
-    pub auto_hide: bool,
 }
 
 impl Default for ActivityBarBehavior {
     fn default() -> Self {
-        Self {
-            hover_expand: true,
-            auto_hide: false,
-        }
+        Self { hover_expand: true }
     }
 }
 
@@ -121,14 +116,26 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 width: var(--ab-expanded-width);
                 padding-right: var(--ab-expanded-padding);
             }
-            /* Auto-hide: the bar reserves no space and its panel sits off the left
-               edge, peeking a few px; hovering that edge slides it fully in over the
-               pane content. */
+            /* Auto-hide: the bar reserves no space and its panel sits fully off the
+               left edge (clipped by the pane's overflow:hidden, so it never bleeds
+               into a neighbouring pane). An invisible edge strip (::before) is the
+               hover target that summons it — hovering the strip slides the panel in
+               over the pane content; it stays open while the cursor is over the
+               revealed panel, and slides back out on leave. */
             SCOPE.AUTO_HIDE {
                 width: 0;
             }
+            SCOPE.AUTO_HIDE::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 12px;
+                z-index: 9;
+            }
             SCOPE.AUTO_HIDE PANEL {
-                transform: translateX(calc(-100% + 6px));
+                transform: translateX(-100%);
             }
             SCOPE.AUTO_HIDE:hover PANEL {
                 transform: translateX(0);
@@ -206,6 +213,10 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     data: Signal<D>,
     ctx: MullionContext<D>,
     #[prop(optional)] app_icon: Option<ActivityIcon>,
+    /// When `true`, this pane's bar tucks off the left edge and reveals on
+    /// edge-hover (resolved per-pane by the host). Default: pinned/visible.
+    #[prop(default = false)]
+    auto_hide: bool,
 ) -> impl IntoView {
     let style = ctx.activity_bar_style.clone();
     let (expanded_cat, set_expanded_cat) = signal(Option::<CategoryId>::None);
@@ -299,7 +310,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         if !ctx.activity_bar_behavior.hover_expand {
             mods.push(ActivityBarModifier::Collapsed);
         }
-        if ctx.activity_bar_behavior.auto_hide {
+        if auto_hide {
             mods.push(ActivityBarModifier::AutoHide);
         }
         if mods.is_empty() {

@@ -184,6 +184,14 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
         .map(|f| data.with_untracked(|d| f(d)))
         .unwrap_or(false);
 
+    // Does this pane auto-hide its (kept) activity bar off the edge? Same one-shot
+    // untracked evaluation, since it too is keyed on the pane's stable role.
+    let auto_hide_bar = ctx
+        .auto_hide_activity_bar
+        .as_ref()
+        .map(|f| data.with_untracked(|d| f(d)))
+        .unwrap_or(false);
+
     // Host-provided per-pane bottom border (e.g. session color). Reactive: the
     // closure calls the host fn, which reads live signals, so the border tracks
     // session changes. `box-sizing:border-box` keeps the 2px inside the pane.
@@ -204,9 +212,9 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
             {(!hide_bar).then(|| {
                 let app_icon = ctx.app_icon.clone();
                 if let Some(icon) = app_icon {
-                    view! { <ActivityBar pane_id=id_bar.clone() data=data ctx=ctx.clone() app_icon=icon /> }.into_any()
+                    view! { <ActivityBar pane_id=id_bar.clone() data=data ctx=ctx.clone() app_icon=icon auto_hide=auto_hide_bar /> }.into_any()
                 } else {
-                    view! { <ActivityBar pane_id=id_bar.clone() data=data ctx=ctx.clone() /> }.into_any()
+                    view! { <ActivityBar pane_id=id_bar.clone() data=data ctx=ctx.clone() auto_hide=auto_hide_bar /> }.into_any()
                 }
             })}
             <div style="flex:1 1 0;min-width:0;min-height:0;overflow:hidden;position:relative">

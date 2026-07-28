@@ -3,6 +3,10 @@ name = "mullion-demo"
 version = "0.1.0"
 edition = "2021"
 
+# Standalone example crate: its own workspace root so cargo/Trunk don't tie it
+# to the parent `mullion` workspace.
+[workspace]
+
 [dependencies]
 mullion = { path = "../.." }
 css-styled = { git = "https://github.com/ignition-is-go/css-styled.git", version = "0.1.0" }

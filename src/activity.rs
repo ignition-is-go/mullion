@@ -117,10 +117,12 @@ impl<D: PaneData> Clone for ActivityDef<D> {
     }
 }
 
-/// Internal representation pairing an activity with its category id.
+/// Internal representation pairing an activity with its category id. `category`
+/// is `None` for a free-floating activity (registered outside any category —
+/// rendered as a top-level icon in the activity bar).
 pub struct ActivityWithCategory<D: PaneData> {
     pub def: ActivityDef<D>,
-    pub category: CategoryId,
+    pub category: Option<CategoryId>,
 }
 
 impl<D: PaneData> Clone for ActivityWithCategory<D> {

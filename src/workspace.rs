@@ -57,9 +57,9 @@ impl<D: PaneData + Send + Sync> WorkspaceManager<D> {
 
     /// Switch to a workspace by id. Returns the workspace's tree if found.
     pub fn switch_to(&self, id: &WorkspaceId) -> Option<PaneNode<D>> {
-        let tree = self.workspaces.with(|ws| {
-            ws.iter().find(|w| w.id == *id).map(|w| w.tree.clone())
-        });
+        let tree = self
+            .workspaces
+            .with(|ws| ws.iter().find(|w| w.id == *id).map(|w| w.tree.clone()));
         if tree.is_some() {
             self.active.set(id.clone());
         }

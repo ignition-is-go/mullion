@@ -126,8 +126,14 @@ mod tests {
         let css = HeaderStyle::default().to_css();
         // The band must be a flex row that doesn't shrink away in the
         // surrounding flex column.
-        assert!(css.contains("flex-shrink: 0"), "expected flex-shrink:0, got: {css}");
-        assert!(css.contains("--mh-height"), "expected height var, got: {css}");
+        assert!(
+            css.contains("flex-shrink: 0"),
+            "expected flex-shrink:0, got: {css}"
+        );
+        assert!(
+            css.contains("--mh-height"),
+            "expected height var, got: {css}"
+        );
     }
 
     #[test]

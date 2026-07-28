@@ -88,10 +88,7 @@ impl css_styled::StyledComponentBase for SplitHandleStyle {
 /// re-rendering), then commits the final ratio via `on_resize` on
 /// release.
 #[component]
-pub fn SplitHandle(
-    direction: SplitDirection,
-    on_resize: Callback<f64>,
-) -> impl IntoView {
+pub fn SplitHandle(direction: SplitDirection, on_resize: Callback<f64>) -> impl IntoView {
     let axis_modifier = match direction {
         SplitDirection::Horizontal => SplitHandleModifier::Horizontal,
         SplitDirection::Vertical => SplitHandleModifier::Vertical,

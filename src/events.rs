@@ -11,17 +11,11 @@ pub enum PaneEvent<D: PaneData> {
         new_data: D,
     },
     /// A pane was closed.
-    Closed {
-        id: PaneId,
-        data: D,
-    },
+    Closed { id: PaneId, data: D },
     /// A split was resized. `split_key` is the first leaf id under the
     /// split's `second` subtree — the same key used to address splits
     /// throughout the API.
-    Resized {
-        split_key: PaneId,
-        ratio: f64,
-    },
+    Resized { split_key: PaneId, ratio: f64 },
     /// A pane was moved to a new position.
     Moved {
         source: PaneId,
@@ -39,7 +33,5 @@ pub enum PaneEvent<D: PaneData> {
         activity: Option<ActivityId>,
     },
     /// A full tree snapshot (emitted after every mutation for convenience).
-    TreeChanged {
-        tree: PaneNode<D>,
-    },
+    TreeChanged { tree: PaneNode<D> },
 }

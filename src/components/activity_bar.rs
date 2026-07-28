@@ -24,6 +24,9 @@ pub struct ActivityBarBehavior {
     /// activity labels. Set to `false` to pin it at its collapsed width —
     /// useful when labels would overflow surrounding UI, or when the host
     /// app wants a purely icon-driven bar.
+    ///
+    /// Auto-hiding a bar off the pane edge is a *per-pane* decision, not a
+    /// global one — see [`crate::context::PaneAutoHideActivityBar`].
     pub hover_expand: bool,
 }
 
@@ -41,8 +44,16 @@ impl Default for ActivityBarBehavior {
 #[derive(css_styled::StyledComponent, Clone, Debug)]
 #[component(scope = "mullion-ab")]
 #[component(theme = MullionTheme)]
-#[component(class(panel = "mullion-ab-panel", label = "mullion-ab-label", icon_slot = "mullion-ab-icon-slot", btn = "mullion-ab-btn", dot = "mullion-ab-dot", cat_border = "mullion-ab-cat-border", icon = "mullion-ab-icon"))]
-#[component(modifier(collapsed))]
+#[component(class(
+    panel = "mullion-ab-panel",
+    label = "mullion-ab-label",
+    icon_slot = "mullion-ab-icon-slot",
+    btn = "mullion-ab-btn",
+    dot = "mullion-ab-dot",
+    cat_border = "mullion-ab-cat-border",
+    icon = "mullion-ab-icon"
+))]
+#[component(modifier(collapsed, auto_hide))]
 #[component(internals(ActivityBarInternal))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
@@ -99,11 +110,35 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 scrollbar-width: none;
                 width: var(--ab-width);
                 padding-right: 0;
-                transition: width 0.15s ease, padding-right 0.15s ease;
+                transition: width 0.15s ease, padding-right 0.15s ease, transform 0.15s ease;
             }
             SCOPE:not(.COLLAPSED):hover PANEL {
                 width: var(--ab-expanded-width);
                 padding-right: var(--ab-expanded-padding);
+            }
+            /* Auto-hide: the bar reserves no space and its panel sits fully off the
+               left edge (clipped by the pane's overflow:hidden, so it never bleeds
+               into a neighbouring pane). An invisible edge strip (::before) is the
+               hover target that summons it — hovering the strip slides the panel in
+               over the pane content; it stays open while the cursor is over the
+               revealed panel, and slides back out on leave. */
+            SCOPE.AUTO_HIDE {
+                width: 0;
+            }
+            SCOPE.AUTO_HIDE::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 12px;
+                z-index: 9;
+            }
+            SCOPE.AUTO_HIDE PANEL {
+                transform: translateX(-100%);
+            }
+            SCOPE.AUTO_HIDE:hover PANEL {
+                transform: translateX(0);
             }
             LABEL {
                 display: none;
@@ -177,8 +212,11 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     pane_id: PaneId,
     data: Signal<D>,
     ctx: MullionContext<D>,
-    #[prop(optional)]
-    app_icon: Option<ActivityIcon>,
+    #[prop(optional)] app_icon: Option<ActivityIcon>,
+    /// When `true`, this pane's bar tucks off the left edge and reveals on
+    /// edge-hover (resolved per-pane by the host). Default: pinned/visible.
+    #[prop(default = false)]
+    auto_hide: bool,
 ) -> impl IntoView {
     let style = ctx.activity_bar_style.clone();
     let (expanded_cat, set_expanded_cat) = signal(Option::<CategoryId>::None);
@@ -189,27 +227,56 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         let acts = ctx_for_memo.activities_for_pane(&d);
         let cats = ctx_for_memo.sorted_categories();
 
-        let mut groups: Vec<(CategoryId, String, ActivityIcon, String, Vec<(ActivityId, String, ActivityIcon)>)> = Vec::new();
+        let mut groups: Vec<(
+            CategoryId,
+            String,
+            ActivityIcon,
+            String,
+            Vec<(ActivityId, String, ActivityIcon)>,
+        )> = Vec::new();
         for cat in &cats {
             let in_cat: Vec<_> = acts
                 .iter()
-                .filter(|a| a.category == cat.id)
+                .filter(|a| a.category.as_ref() == Some(&cat.id))
                 .map(|a| (a.def.id.clone(), a.def.name.clone(), a.def.icon.clone()))
                 .collect();
             if !in_cat.is_empty() {
-                groups.push((cat.id.clone(), cat.name.clone(), cat.icon.clone(), cat.color.clone(), in_cat));
+                groups.push((
+                    cat.id.clone(),
+                    cat.name.clone(),
+                    cat.icon.clone(),
+                    cat.color.clone(),
+                    in_cat,
+                ));
             }
         }
         groups
     });
 
+    // Free-floating activities (registered outside any category) — rendered as
+    // top-level icons that select directly, with no category expansion.
+    let ctx_for_float = ctx.clone();
+    let floating = Memo::new(move |_| {
+        let d = data.get();
+        ctx_for_float
+            .activities_for_pane(&d)
+            .into_iter()
+            .filter(|a| a.category.is_none())
+            .map(|a| (a.def.id.clone(), a.def.name.clone(), a.def.icon.clone()))
+            .collect::<Vec<(ActivityId, String, ActivityIcon)>>()
+    });
+
     let ctx_for_active = ctx.clone();
     let pid_for_active = pane_id.clone();
     let active_activity = Memo::new(move |_| {
-        ctx_for_active.tree.with(|tree| match tree.find(&pid_for_active) {
-            Some(crate::tree::PaneNode::Leaf { active_activity, .. }) => active_activity.clone(),
-            _ => None,
-        })
+        ctx_for_active
+            .tree
+            .with(|tree| match tree.find(&pid_for_active) {
+                Some(crate::tree::PaneNode::Leaf {
+                    active_activity, ..
+                }) => active_activity.clone(),
+                _ => None,
+            })
     });
 
     // Auto-expand category of active activity
@@ -224,18 +291,33 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     });
 
     let icon_active_opacity = style.icon_active_opacity.clone();
+    let icon_active_opacity_float = icon_active_opacity.clone();
+    // Floating activities have no category to colour their active highlight, so the
+    // selected one highlights in the theme accent (matching the categorised behaviour).
+    let float_accent = ctx.theme.accent.clone();
 
     let ctx_actions = ctx.clone();
+    let ctx_float = ctx.clone();
+    let pid_float = pane_id.clone();
 
     // Host-provided per-pane chrome (e.g. session indicator). Cloned out before
     // `ctx` is moved into the activity-groups closure below.
     let pane_accessory = ctx.pane_accessory.clone();
     let pid_accessory = pane_id.clone();
 
-    let scope_class = if ctx.activity_bar_behavior.hover_expand {
-        ActivityBarStyle::SCOPE.to_string()
-    } else {
-        ActivityBarStyle::class(&[ActivityBarModifier::Collapsed])
+    let scope_class = {
+        let mut mods = Vec::new();
+        if !ctx.activity_bar_behavior.hover_expand {
+            mods.push(ActivityBarModifier::Collapsed);
+        }
+        if auto_hide {
+            mods.push(ActivityBarModifier::AutoHide);
+        }
+        if mods.is_empty() {
+            ActivityBarStyle::SCOPE.to_string()
+        } else {
+            ActivityBarStyle::class(&mods)
+        }
     };
 
     view! {
@@ -268,6 +350,39 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                             </div>
                         }
                     })}
+                    // Free-floating activities: top-level icons, select directly.
+                    {
+                        move || {
+                            let current_active = active_activity.get();
+                            floating.get().into_iter().map(|(act_id, name, icon)| {
+                                let is_active = current_active.as_ref() == Some(&act_id);
+                                let active_style = if is_active {
+                                    ActivityBarStyle::vars(|v| {
+                                        v.icon_opacity(&icon_active_opacity_float)
+                                            .icon_color(&float_accent)
+                                            .icon_stroke_color(&float_accent)
+                                    })
+                                } else {
+                                    String::new()
+                                };
+                                let ctx = ctx_float.clone();
+                                let pid = pid_float.clone();
+                                let label = name.clone();
+                                view! {
+                                    <button class=ActivityBarStyle::BTN
+                                            style=active_style
+                                            on:click=move |_| {
+                                        ctx.set_active_activity(&pid, Some(act_id.clone()));
+                                    }>
+                                        <span class=ActivityBarStyle::ICON_SLOT>
+                                            {render_icon(&icon)}
+                                        </span>
+                                        <span class=ActivityBarStyle::LABEL>{label.clone()}</span>
+                                    </button>
+                                }
+                            }).collect::<Vec<_>>()
+                        }
+                    }
                     {
                         let pane_id = pane_id.clone();
                         move || {
@@ -427,12 +542,17 @@ mod tests {
 fn render_icon(icon: &ActivityIcon) -> AnyView {
     let icon_class = ActivityBarStyle::ICON;
     match icon {
-        ActivityIcon::Class(class) => view! { <span class=format!("{} {}", icon_class, class)></span> }.into_any(),
+        ActivityIcon::Class(class) => {
+            view! { <span class=format!("{} {}", icon_class, class)></span> }.into_any()
+        }
         ActivityIcon::Svg(svg) => {
             let normalized = normalize_svg(svg);
             view! { <span class=icon_class inner_html={normalized}></span> }.into_any()
         }
-        ActivityIcon::Url(url) => view! { <img class=icon_class src={url.clone()} style="object-fit:contain" /> }.into_any(),
+        ActivityIcon::Url(url) => {
+            view! { <img class=icon_class src={url.clone()} style="object-fit:contain" /> }
+                .into_any()
+        }
     }
 }
 

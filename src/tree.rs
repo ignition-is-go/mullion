@@ -279,7 +279,7 @@ impl<D: PaneData> PaneNode<D> {
         if source == destination {
             return false;
         }
-        let source_leaf = match self.find(source) {
+        let (id, data, active_activity) = match self.find(source) {
             Some(PaneNode::Leaf {
                 id,
                 data,
@@ -291,32 +291,55 @@ impl<D: PaneData> PaneNode<D> {
         if self.close(source).is_none() {
             return false;
         }
-        if let Some(dest_node) = self.find_mut(destination) {
-            let direction = edge.split_direction();
-            let original = std::mem::replace(
-                dest_node,
-                PaneNode::leaf(PaneId::new("__temp__"), source_leaf.1.clone()),
-            );
-            let new_leaf = PaneNode::Leaf {
-                id: source_leaf.0,
-                active_activity: source_leaf.2,
-                data: source_leaf.1,
-            };
-            let (first, second) = if edge.source_is_first() {
-                (Box::new(new_leaf), Box::new(original))
-            } else {
-                (Box::new(original), Box::new(new_leaf))
-            };
-            *dest_node = PaneNode::Split {
-                direction,
-                ratio: 0.5,
-                first,
-                second,
-            };
-            true
+        // `close` may have collapsed the destination's parent, but never the
+        // destination leaf itself, so it is still addressable.
+        self.insert_leaf(destination, edge, id, data, active_activity)
+    }
+
+    /// Insert a brand-new leaf beside `destination`, splitting it at `edge`.
+    ///
+    /// This is the second half of [`PaneNode::move_pane`] on its own: the
+    /// destination leaf is replaced by a split holding the original and the new
+    /// leaf, ordered by [`DropEdge::source_is_first`]. Use it for drop-to-create
+    /// (an activity dragged out of the activity bar), where there is no existing
+    /// pane to relocate.
+    ///
+    /// Unlike [`PaneNode::split`], this honours the drop edge, so the new leaf
+    /// can land *before* the destination (`Top`/`Left`) as well as after it.
+    ///
+    /// Returns `false` if `destination` is not a leaf in this tree.
+    pub fn insert_leaf(
+        &mut self,
+        destination: &PaneId,
+        edge: DropEdge,
+        new_id: PaneId,
+        new_data: D,
+        active_activity: Option<ActivityId>,
+    ) -> bool {
+        let Some(dest_node) = self.find_mut(destination) else {
+            return false;
+        };
+        let original = std::mem::replace(
+            dest_node,
+            PaneNode::leaf(PaneId::new("__temp__"), new_data.clone()),
+        );
+        let new_leaf = PaneNode::Leaf {
+            id: new_id,
+            active_activity,
+            data: new_data,
+        };
+        let (first, second) = if edge.source_is_first() {
+            (Box::new(new_leaf), Box::new(original))
         } else {
-            false
-        }
+            (Box::new(original), Box::new(new_leaf))
+        };
+        *dest_node = PaneNode::Split {
+            direction: edge.split_direction(),
+            ratio: 0.5,
+            first,
+            second,
+        };
+        true
     }
 
     /// Check if this subtree contains a pane with the given id.
@@ -541,6 +564,177 @@ mod tests {
             "split keys must be unique, got {:?}",
             keys,
         );
+    }
+
+    // ---- insert_leaf (drop-to-create) ----
+
+    fn leaf_order(node: &PaneNode<D>) -> Vec<PaneId> {
+        node.leaf_ids()
+    }
+
+    #[test]
+    fn insert_leaf_before_destination_on_leading_edges() {
+        // Top/Left mean "the new pane goes first".
+        for edge in [DropEdge::Left, DropEdge::Top] {
+            let mut t = sample();
+            assert!(t.insert_leaf(&PaneId::new("b"), edge, PaneId::new("new"), D(9), None));
+            assert_eq!(
+                leaf_order(&t),
+                vec![PaneId::new("a"), PaneId::new("new"), PaneId::new("b")],
+                "edge {edge:?} should place the new leaf before the destination",
+            );
+        }
+    }
+
+    #[test]
+    fn insert_leaf_after_destination_on_trailing_edges() {
+        for edge in [DropEdge::Right, DropEdge::Bottom, DropEdge::Center] {
+            let mut t = sample();
+            assert!(t.insert_leaf(&PaneId::new("a"), edge, PaneId::new("new"), D(9), None));
+            assert_eq!(
+                leaf_order(&t),
+                vec![PaneId::new("a"), PaneId::new("new"), PaneId::new("b")],
+                "edge {edge:?} should place the new leaf after the destination",
+            );
+        }
+    }
+
+    #[test]
+    fn insert_leaf_uses_the_edges_split_direction() {
+        let mut t = sample();
+        t.insert_leaf(
+            &PaneId::new("a"),
+            DropEdge::Bottom,
+            PaneId::new("new"),
+            D(9),
+            None,
+        );
+        // "a" was `first` of a horizontal split; it is now a vertical split.
+        let PaneNode::Split { first, .. } = &t else {
+            panic!("root should still be a split")
+        };
+        assert!(matches!(
+            **first,
+            PaneNode::Split {
+                direction: SplitDirection::Vertical,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn insert_leaf_carries_the_dropped_activity() {
+        let mut t = sample();
+        let act = ActivityId::new("files");
+        t.insert_leaf(
+            &PaneId::new("a"),
+            DropEdge::Right,
+            PaneId::new("new"),
+            D(9),
+            Some(act.clone()),
+        );
+        let Some(PaneNode::Leaf {
+            active_activity, ..
+        }) = t.find(&PaneId::new("new"))
+        else {
+            panic!("new leaf should exist")
+        };
+        assert_eq!(active_activity.as_ref(), Some(&act));
+    }
+
+    #[test]
+    fn insert_leaf_on_unknown_destination_is_a_no_op() {
+        let mut t = sample();
+        let before = t.clone();
+        assert!(!t.insert_leaf(
+            &PaneId::new("nope"),
+            DropEdge::Right,
+            PaneId::new("new"),
+            D(9),
+            None
+        ));
+        assert_eq!(t, before, "a refused insert must not touch the tree");
+    }
+
+    #[test]
+    fn split_keys_stay_unique_after_insert_leaf_on_every_edge() {
+        // The hazard: dropping into an edge mints a new split node, and split
+        // ratios (and the `<For>` over split handles) are keyed by split_key.
+        // A collision would make two splits share a ratio signal and a render
+        // key. Keys are derived (first leaf of the `second` subtree), not
+        // generated, so this asserts the derivation survives insert_leaf at
+        // every edge and at every position in a nested tree.
+        for edge in [
+            DropEdge::Left,
+            DropEdge::Right,
+            DropEdge::Top,
+            DropEdge::Bottom,
+            DropEdge::Center,
+        ] {
+            for dest in ["a", "b", "c"] {
+                let mut t = PaneNode::Split {
+                    direction: SplitDirection::Horizontal,
+                    ratio: 0.25,
+                    first: Box::new(PaneNode::leaf(PaneId::new("a"), D(1))),
+                    second: Box::new(PaneNode::Split {
+                        direction: SplitDirection::Vertical,
+                        ratio: 0.5,
+                        first: Box::new(PaneNode::leaf(PaneId::new("b"), D(2))),
+                        second: Box::new(PaneNode::leaf(PaneId::new("c"), D(3))),
+                    }),
+                };
+                assert!(t.insert_leaf(
+                    &PaneId::new(dest),
+                    edge,
+                    PaneId::new("new"),
+                    D(9),
+                    None
+                ));
+
+                let keys = collect_split_keys(&t);
+                let unique: std::collections::HashSet<_> = keys.iter().cloned().collect();
+                assert_eq!(
+                    unique.len(),
+                    keys.len(),
+                    "duplicate split key after {edge:?} drop on {dest}: {keys:?}",
+                );
+                // One insert adds exactly one split.
+                assert_eq!(keys.len(), 3, "{edge:?} on {dest}");
+                // And no pane was lost or duplicated.
+                let leaves = t.leaf_ids();
+                let unique_leaves: std::collections::HashSet<_> = leaves.iter().cloned().collect();
+                assert_eq!(unique_leaves.len(), 4, "{edge:?} on {dest}: {leaves:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn move_pane_still_relocates_after_insert_leaf_refactor() {
+        let mut t = PaneNode::Split {
+            direction: SplitDirection::Horizontal,
+            ratio: 0.5,
+            first: Box::new(PaneNode::leaf(PaneId::new("a"), D(1))),
+            second: Box::new(PaneNode::Split {
+                direction: SplitDirection::Vertical,
+                ratio: 0.5,
+                first: Box::new(PaneNode::leaf(PaneId::new("b"), D(2))),
+                second: Box::new(PaneNode::leaf(PaneId::new("c"), D(3))),
+            }),
+        };
+        assert!(t.move_pane(&PaneId::new("a"), &PaneId::new("c"), DropEdge::Bottom));
+        // "a" left its slot and now sits below "c"; no pane lost.
+        assert_eq!(
+            leaf_order(&t),
+            vec![PaneId::new("b"), PaneId::new("c"), PaneId::new("a")],
+        );
+    }
+
+    #[test]
+    fn move_pane_onto_itself_is_rejected() {
+        let mut t = sample();
+        let before = t.clone();
+        assert!(!t.move_pane(&PaneId::new("a"), &PaneId::new("a"), DropEdge::Right));
+        assert_eq!(t, before);
     }
 
     #[test]

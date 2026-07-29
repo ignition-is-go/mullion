@@ -3,6 +3,7 @@ use leptos::prelude::*;
 use md_icons::outlined;
 use mullion::*;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 // ── Demo styles ──────────────────────────────────────────────────────────────
 
@@ -372,10 +373,27 @@ fn App() -> impl IntoView {
             PaneEvent::Moved { source, destination, edge } => format!("[mullion] Moved {:?} -> {:?} ({:?})", source, destination, edge),
             PaneEvent::DirectionChanged { pane, direction } => format!("[mullion] Dir {:?} -> {:?}", pane, direction),
             PaneEvent::ActivityChanged { pane, activity } => format!("[mullion] Activity {:?} -> {:?}", pane, activity),
+            PaneEvent::ActivityDropped { activity, destination, edge, new_id, .. } => {
+                format!("[mullion] Dropped {:?} at {:?} of {:?} -> new pane {:?}", activity, edge, destination, new_id)
+            }
             PaneEvent::TreeChanged { .. } => return,
         };
         web_sys::console::log_1(&desc.into());
     };
+
+    // Drop-to-create: dragging an activity out of the bar asks the host to mint
+    // the pane, since only the host can allocate an id and build the pane's
+    // data. A persisted app would create its pane entity here; the demo just
+    // makes up an id and labels the pane after the activity it came from.
+    let new_pane: PaneFactory<DemoData> = Arc::new(|activity, destination, edge| {
+        let id = PaneId::new(format!("drop-{:.0}", web_sys::js_sys::Math::random() * 1e12));
+        web_sys::console::log_1(
+            &format!("[demo] minting {:?} for {:?} ({:?} of {:?})", id, activity, edge, destination).into(),
+        );
+        // Defaults leave every filter flag on, so the dropped activity is
+        // guaranteed to pass its own `filter` in the new pane.
+        Some((id, DemoData { label: format!("Activity {}", activity.0), ..Default::default() }))
+    });
 
     view! {
         <style>{demo_css}</style>
@@ -384,6 +402,7 @@ fn App() -> impl IntoView {
             categories=categories()
             on_event=on_event
             app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
+            new_pane=new_pane
         >
             <DemoLayout workspace_mgr=workspace_mgr />
         </MullionProvider>

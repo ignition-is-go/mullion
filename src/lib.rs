@@ -1,6 +1,7 @@
 pub mod activity;
 pub mod components;
 pub mod context;
+pub mod drag;
 pub mod events;
 pub mod theme;
 pub mod tree;
@@ -19,8 +20,10 @@ pub use components::workspace_switcher::{
     WorkspaceSwitcher, WorkspaceSwitcherModifier, WorkspaceSwitcherStyle,
 };
 pub use context::{
-    MullionContext, PaneAccessory, PaneAutoHideActivityBar, PaneBorderColor, PaneHideActivityBar,
+    MullionContext, PaneAccessory, PaneAutoHideActivityBar, PaneBorderColor, PaneFactory,
+    PaneHideActivityBar,
 };
+pub use drag::DragPayload;
 pub use events::PaneEvent;
 pub use theme::MullionTheme;
 pub use tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};

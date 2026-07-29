@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::context::MullionContext;
+use crate::drag::DragPayload;
 use crate::theme::MullionTheme;
 use crate::tree::{DropEdge, PaneData, PaneId};
 
@@ -40,7 +41,7 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
     ctx: MullionContext<D>,
 ) -> impl IntoView {
     let (hover_edge, set_hover_edge) = signal(Option::<DropEdge>::None);
-    let dragging = ctx.dragging_pane;
+    let dragging = ctx.drag;
 
     // These are non-reactive — rendered once when the overlay is visible.
     // We build the overlay outside the reactive closure so event handlers are Fn, not FnOnce.
@@ -51,7 +52,13 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
         let on_dragover = move |ev: web_sys::DragEvent| {
             ev.prevent_default();
             if let Some(dt) = ev.data_transfer() {
-                dt.set_drop_effect("move");
+                // A pane drag relocates; an activity drag creates. The cursor
+                // should say which.
+                let effect = match dragging.get_untracked() {
+                    Some(DragPayload::NewActivity(_)) => "copy",
+                    _ => "move",
+                };
+                dt.set_drop_effect(effect);
             }
 
             let target = ev.current_target().unwrap();
@@ -81,6 +88,12 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
             set_hover_edge.set(Some(edge));
         };
 
+        let on_dragenter = move |ev: web_sys::DragEvent| {
+            // Must preventDefault here as well as in dragover, or the element is
+            // not a valid drop target.
+            ev.prevent_default();
+        };
+
         let on_dragleave = move |_: web_sys::DragEvent| {
             set_hover_edge.set(None);
         };
@@ -88,19 +101,31 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
         let on_drop = move |ev: web_sys::DragEvent| {
             ev.prevent_default();
             let edge = hover_edge.get_untracked();
-            let source = dragging.get_untracked();
+            let payload = dragging.get_untracked();
             set_hover_edge.set(None);
-            ctx_drop.dragging_pane.set(None);
+            ctx_drop.drag.set(None);
 
-            if let (Some(source_id), Some(edge)) = (source, edge) {
-                if source_id != pane_id_drop {
-                    ctx_drop.move_pane(&source_id, &pane_id_drop, edge);
+            let (Some(payload), Some(edge)) = (payload, edge) else {
+                return;
+            };
+            match payload {
+                // Relocate an existing pane. Dropping onto itself is a no-op.
+                DragPayload::Pane(source_id) => {
+                    if source_id != pane_id_drop {
+                        ctx_drop.move_pane(&source_id, &pane_id_drop, edge);
+                    }
+                }
+                // Create a new pane for the activity. Valid on every pane,
+                // including the one whose activity bar it was dragged from.
+                DragPayload::NewActivity(activity) => {
+                    ctx_drop.drop_activity(&activity, &pane_id_drop, edge);
                 }
             }
         };
 
         view! {
             <div style="position:absolute;inset:0;z-index:20"
+                 on:dragenter=on_dragenter
                  on:dragover=on_dragover
                  on:dragleave=on_dragleave
                  on:drop=on_drop>
@@ -116,13 +141,12 @@ pub fn DropOverlay<D: PaneData + Send + Sync>(
 
     view! {
         {move || {
-            let is_dragging = dragging.get().is_some();
-            let is_self = dragging.get().as_ref() == Some(&pane_id);
-
-            if is_dragging && !is_self {
-                Some(overlay_view.clone())
-            } else {
-                None
+            // A pane drag skips its own pane (dropping there is a no-op); a
+            // new-activity drag is live on every pane, so a single-pane layout
+            // still offers drop zones.
+            match dragging.get() {
+                Some(payload) if !payload.is_self(&pane_id) => Some(overlay_view.clone()),
+                _ => None,
             }
         }}
     }

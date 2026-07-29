@@ -81,6 +81,12 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// bar. Default: every pane's bar is pinned/visible.
     #[prop(optional)]
     auto_hide_activity_bar: Option<crate::context::PaneAutoHideActivityBar<D>>,
+    /// Optional hook that mints a pane for an activity dragged out of the
+    /// activity bar and dropped into the layout. Return the new pane's id and
+    /// data, or `None` to refuse the drop. Default: `None`, which also means
+    /// activities are not draggable at all.
+    #[prop(optional)]
+    new_pane: Option<crate::context::PaneFactory<D>>,
     children: Children,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
@@ -124,6 +130,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         show_pane_header,
         hide_activity_bar,
         auto_hide_activity_bar,
+        new_pane,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -182,6 +189,12 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// bar. Default: every pane's bar is pinned/visible.
     #[prop(optional)]
     auto_hide_activity_bar: Option<crate::context::PaneAutoHideActivityBar<D>>,
+    /// Optional hook that mints a pane for an activity dragged out of the
+    /// activity bar and dropped into the layout. Return the new pane's id and
+    /// data, or `None` to refuse the drop. Default: `None`, which also means
+    /// activities are not draggable at all.
+    #[prop(optional)]
+    new_pane: Option<crate::context::PaneFactory<D>>,
 ) -> impl IntoView {
     let theme = use_context::<MullionTheme>().unwrap_or_default();
     let mullion_style = use_context::<MullionStyle>().unwrap_or_default();
@@ -224,6 +237,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         show_pane_header,
         hide_activity_bar,
         auto_hide_activity_bar,
+        new_pane,
     );
 
     if let Some(upstream_sig) = upstream {

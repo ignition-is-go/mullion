@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use leptos_resize_handle::{use_drag, Direction as LrhDirection};
 
 use crate::context::MullionContext;
+use crate::drag::DragPayload;
 use crate::theme::MullionTheme;
 use crate::tree::{
     collect_split_keys, find_split_direction, leaf_rect, split_parent_rect, ActivityId, PaneData,
@@ -271,13 +272,13 @@ fn PaneHoverControls<D: PaneData + Send + Sync>(
         <div style=wrap>
             <div title="Move pane" draggable="true" style=format!("{btn}cursor:grab;font-size:13px;")
                 on:dragstart=move |ev| {
-                    ctx_d.dragging_pane.set(Some(pid_d.clone()));
+                    ctx_d.drag.set(Some(DragPayload::Pane(pid_d.clone())));
                     if let Some(dt) = ev.data_transfer() {
                         let _ = dt.set_data("text/plain", &pid_d.0);
                         dt.set_effect_allowed("move");
                     }
                 }
-                on:dragend=move |_| ctx_de.dragging_pane.set(None)
+                on:dragend=move |_| ctx_de.drag.set(None)
             >"⠿"</div>
             <button title="Split horizontal" style=btn inner_html=HC_SPLIT_H
                 on:click=move |_| { ctx_h.split_pane(&pid_h, SplitDirection::Horizontal, fresh_id(), data.get_untracked()); } />

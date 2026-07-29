@@ -11,6 +11,7 @@ use crate::components::mullion_root::MullionStyle;
 use crate::components::pane_header::HeaderStyle;
 use crate::components::pane_view::PaneStyle;
 use crate::components::split_handle::SplitHandleStyle;
+use crate::drag::DragPayload;
 use crate::events::PaneEvent;
 use crate::theme::MullionTheme;
 use crate::tree::{
@@ -51,6 +52,24 @@ pub type PaneHideActivityBar<D> = Arc<dyn Fn(&D) -> bool + Send + Sync>;
 /// always-visible bar.
 pub type PaneAutoHideActivityBar<D> = Arc<dyn Fn(&D) -> bool + Send + Sync>;
 
+/// Host hook that mints a pane for an activity dragged out of the activity bar.
+///
+/// Mullion owns the layout tree but cannot invent a pane: only the host knows
+/// how to allocate a [`PaneId`] and build a `D` (in a persisted app, that
+/// usually means creating the pane entity server-side, or minting a client-side
+/// id to be reconciled). So drop-to-create asks the host for those two values
+/// and then does the tree surgery itself.
+///
+/// Called with the dragged activity, the destination pane the drop landed on,
+/// and the edge — the destination lets the host inherit context from the
+/// neighbouring pane (project, session, …). Return `None` to refuse the drop,
+/// leaving the layout untouched.
+///
+/// Without this hook the feature is off: activities are not draggable at all,
+/// so there is no affordance that silently does nothing.
+pub type PaneFactory<D> =
+    Arc<dyn Fn(&ActivityId, &PaneId, DropEdge) -> Option<(PaneId, D)> + Send + Sync>;
+
 /// The reactive store for the mullion pane system.
 ///
 /// Provided via Leptos context at `<MullionRoot>`. The consuming app interacts
@@ -88,8 +107,11 @@ pub struct MullionContext<D: PaneData> {
     event_tx: StoredValue<Box<dyn Fn(PaneEvent<D>) + Send + Sync>>,
     /// The pane the mouse is currently over.
     pub focused_pane: RwSignal<Option<PaneId>>,
-    /// Pane currently being dragged (for move operations).
-    pub dragging_pane: RwSignal<Option<PaneId>>,
+    /// What is currently being dragged, if anything — an existing pane being
+    /// relocated, or an activity being placed as a new pane. See
+    /// [`DragPayload`]; for the common narrow questions use
+    /// [`Self::dragging_pane`] / [`Self::dragging_activity`].
+    pub drag: RwSignal<Option<DragPayload>>,
     /// Global color theme.
     pub theme: MullionTheme,
     /// Resolved themes (captured at provider time so they work in reactive closures).
@@ -120,6 +142,9 @@ pub struct MullionContext<D: PaneData> {
     /// activity bar (kept, but tucked off the left edge and revealed on edge-hover).
     /// `None` = every pane's bar is pinned/always-visible.
     pub auto_hide_activity_bar: Option<PaneAutoHideActivityBar<D>>,
+    /// Optional host hook that mints a pane for an activity dragged out of the
+    /// activity bar. `None` = activities are not draggable (feature off).
+    pub new_pane: Option<PaneFactory<D>>,
     /// DOM element refs for each leaf pane (for positioning overlays, tooltips, etc.).
     pane_elements: Arc<Mutex<HashMap<PaneId, SendWrapper<web_sys::HtmlElement>>>>,
 }
@@ -145,6 +170,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         show_pane_header: bool,
         hide_activity_bar: Option<PaneHideActivityBar<D>>,
         auto_hide_activity_bar: Option<PaneAutoHideActivityBar<D>>,
+        new_pane: Option<PaneFactory<D>>,
     ) -> Self {
         // Flatten categories into metadata + activities with category ids. Floating
         // activities (registered outside any category) carry `category: None`.
@@ -190,7 +216,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
             focused_pane: RwSignal::new(None),
-            dragging_pane: RwSignal::new(None),
+            drag: RwSignal::new(None),
             theme,
             mullion_style,
             activity_bar_style,
@@ -205,6 +231,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             show_pane_header,
             hide_activity_bar,
             auto_hide_activity_bar,
+            new_pane,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -380,6 +407,61 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             });
             self.emit_tree_changed();
         }
+    }
+
+    /// The pane currently being relocated, or `None` if nothing is being
+    /// dragged *or* the drag is a new-activity drag. Reactive.
+    pub fn dragging_pane(&self) -> Option<PaneId> {
+        self.drag.get().and_then(|p| p.pane().cloned())
+    }
+
+    /// The activity currently being dragged out of an activity bar, or `None` if
+    /// nothing is being dragged *or* the drag is a pane move. Reactive.
+    pub fn dragging_activity(&self) -> Option<ActivityId> {
+        self.drag.get().and_then(|p| p.activity().cloned())
+    }
+
+    /// Place a dragged activity into the layout as a new pane, beside
+    /// `destination` at `edge`.
+    ///
+    /// Asks the host's `new_pane` hook ([`PaneFactory`]) for the new pane's id
+    /// and data, then does the tree surgery. Does nothing if no hook is
+    /// installed or the hook returns `None` (a refused drop leaves the layout
+    /// untouched).
+    ///
+    /// On success emits `PaneEvent::ActivityDropped` then
+    /// `PaneEvent::TreeChanged`.
+    pub fn drop_activity(&self, activity: &ActivityId, destination: &PaneId, edge: DropEdge) {
+        let Some(factory) = self.new_pane.as_ref() else {
+            return;
+        };
+        let Some((new_id, new_data)) = factory(activity, destination, edge) else {
+            return;
+        };
+
+        let mut inserted = false;
+        self.tree.update(|tree| {
+            inserted = tree.insert_leaf(
+                destination,
+                edge,
+                new_id.clone(),
+                new_data.clone(),
+                Some(activity.clone()),
+            );
+        });
+        if !inserted {
+            return;
+        }
+
+        self.reseed_ratios();
+        self.emit(PaneEvent::ActivityDropped {
+            activity: activity.clone(),
+            destination: destination.clone(),
+            edge,
+            new_id,
+            new_data,
+        });
+        self.emit_tree_changed();
     }
 
     /// Set the active activity for a pane.

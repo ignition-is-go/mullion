@@ -22,6 +22,20 @@ pub enum PaneEvent<D: PaneData> {
         destination: PaneId,
         edge: DropEdge,
     },
+    /// An activity was dragged out of an activity bar and dropped into the
+    /// layout, creating a new pane for it.
+    ///
+    /// `new_id` and `new_data` are whatever the host's `new_pane` hook
+    /// ([`crate::PaneFactory`]) returned, so the host can persist the pane it
+    /// just minted. The tree has already been mutated when this fires; a
+    /// `TreeChanged` follows.
+    ActivityDropped {
+        activity: ActivityId,
+        destination: PaneId,
+        edge: DropEdge,
+        new_id: PaneId,
+        new_data: D,
+    },
     /// The split direction of a pane's parent was changed.
     DirectionChanged {
         pane: PaneId,

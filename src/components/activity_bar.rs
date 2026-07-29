@@ -2,8 +2,10 @@ use leptos::prelude::*;
 
 use crate::activity::ActivityIcon;
 use crate::context::MullionContext;
+use crate::drag::DragPayload;
 use crate::theme::MullionTheme;
 use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
+
 
 /// Internal CSS variables for the activity bar — not exposed to consumers.
 #[derive(css_styled::CssVars)]
@@ -53,7 +55,7 @@ impl Default for ActivityBarBehavior {
     cat_border = "mullion-ab-cat-border",
     icon = "mullion-ab-icon"
 ))]
-#[component(modifier(collapsed, auto_hide))]
+#[component(modifier(collapsed, auto_hide, dragging))]
 #[component(internals(ActivityBarInternal))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
@@ -112,6 +114,22 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 padding-right: 0;
                 transition: width 0.15s ease, padding-right 0.15s ease, transform 0.15s ease;
             }
+            /* Hold the bar open for the duration of a drag. Chrome drops
+               `:hover` as soon as a native drag starts, so without this the
+               panel collapses mid-gesture and the row being dragged shrinks out
+               from under the cursor. That is not what was cancelling drags (see
+               the `request_animation_frame` note on the drag source for the real
+               cause) — but a drag source that resizes underneath the pointer is a
+               hazard worth removing, and holding the bar open also keeps the drag
+               image stable. */
+            SCOPE.DRAGGING PANEL {
+                width: var(--ab-expanded-width);
+                transition: none;
+            }
+            SCOPE.DRAGGING LABEL {
+                opacity: 1;
+                transition: none;
+            }
             SCOPE:not(.COLLAPSED):hover PANEL {
                 width: var(--ab-expanded-width);
                 padding-right: var(--ab-expanded-padding);
@@ -141,12 +159,20 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 transform: translateX(0);
             }
             LABEL {
-                display: none;
+                /* Hidden by zero width + opacity rather than `display:none`, so
+                   the label never leaves the box tree while a drag is in flight.
+                   `flex-shrink` takes it to 0px against the fixed-width icon slot
+                   when the bar is collapsed and `overflow:hidden` clips the text,
+                   so it is invisible either way. Not a drag source — the row is,
+                   because the row is the element that is always rendered. */
+                opacity: 0;
+                min-width: 0;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                transition: opacity 0.15s ease;
             }
             SCOPE:not(.COLLAPSED):hover LABEL {
-                display: inline;
+                opacity: 1;
             }
             ICON_SLOT {
                 width: var(--ab-width);
@@ -160,6 +186,18 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 align-items: center;
                 height: var(--ab-width);
                 cursor: pointer;
+                /* Without this, mousedown on a label's text starts a text
+                   selection, which pre-empts the HTML5 drag — so an activity
+                   would only be draggable by its icon, never by its name.
+                   Toolbar chrome shouldn't be selectable anyway. */
+                user-select: none;
+                /* `draggable="true"` alone is not enough for a text-bearing
+                   element in Chrome: the text still wins the mousedown, so an
+                   activity could be dragged by its icon but never by its name.
+                   `-webkit-user-drag: element` makes the whole element the drag
+                   source explicitly. Non-standard but supported in Chrome and
+                   Safari; harmless elsewhere. */
+                -webkit-user-drag: element;
                 white-space: nowrap;
                 border: none;
                 background: none;
@@ -305,13 +343,22 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     let pane_accessory = ctx.pane_accessory.clone();
     let pid_accessory = pane_id.clone();
 
-    let scope_class = {
+    // Reactive on `drag`: while a drag is in flight the bar gets the `dragging`
+    // modifier so it stays open (see the CSS for why that is load-bearing, not
+    // cosmetic). This is a class swap on an existing element, not a re-render —
+    // replacing the node mid-drag would cancel the drag just as surely.
+    let hover_expand = ctx.activity_bar_behavior.hover_expand;
+    let ctx_drag_class = ctx.clone();
+    let scope_class = move || {
         let mut mods = Vec::new();
-        if !ctx.activity_bar_behavior.hover_expand {
+        if !hover_expand {
             mods.push(ActivityBarModifier::Collapsed);
         }
         if auto_hide {
             mods.push(ActivityBarModifier::AutoHide);
+        }
+        if ctx_drag_class.drag.get().is_some() {
+            mods.push(ActivityBarModifier::Dragging);
         }
         if mods.is_empty() {
             ActivityBarStyle::SCOPE.to_string()
@@ -334,14 +381,14 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                  style="cursor:grab"
                                  draggable="true"
                                  on:dragstart=move |ev| {
-                                     ctx_drag.dragging_pane.set(Some(pid_drag.clone()));
+                                     ctx_drag.drag.set(Some(DragPayload::Pane(pid_drag.clone())));
                                      if let Some(dt) = ev.data_transfer() {
                                          let _ = dt.set_data("text/plain", &pid_drag.0);
                                          dt.set_effect_allowed("move");
                                      }
                                  }
                                  on:dragend=move |_| {
-                                     ctx_dragend.dragging_pane.set(None);
+                                     ctx_dragend.drag.set(None);
                                  }>
                                 <span class=ActivityBarStyle::ICON_SLOT>
                                     {render_icon(&icon)}
@@ -368,17 +415,79 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                 let ctx = ctx_float.clone();
                                 let pid = pid_float.clone();
                                 let label = name.clone();
+                                // A `div role=button`, not a `<button>`: form
+                                // controls consume mousedown for activation, so
+                                // browsers won't reliably start an HTML5 drag
+                                // from one (Firefox ignores `draggable` on them
+                                // outright). The app icon above is a div for the
+                                // same reason. Keyboard activation is restored
+                                // with tabindex + Enter/Space below.
+                                let ctx_ds = ctx_float.clone();
+                                let ctx_de = ctx_float.clone();
+                                let ctx_key = ctx_float.clone();
+                                let act_drag = act_id.clone();
+                                let act_key = act_id.clone();
+                                let pid_key = pid_float.clone();
+                                let can_drag = ctx_float.new_pane.is_some();
                                 view! {
-                                    <button class=ActivityBarStyle::BTN
+                                    <div class=ActivityBarStyle::BTN
+                                            role="button"
+                                            tabindex="0"
                                             style=active_style
+                                            draggable=can_drag.then_some("true")
+                                            on:dragstart=move |ev| {
+                                                if !can_drag { return }
+                                                if let Some(dt) = ev.data_transfer() {
+                                                    let _ = dt.set_data("text/plain", &act_drag.0);
+                                                    dt.set_effect_allowed("copy");
+                                                }
+                                                // Deferred out of the dragstart handler on purpose.
+                                                // Setting this mounts every pane's DropOverlay, and
+                                                // an element appearing under the pointer while the
+                                                // drag session is still being established makes
+                                                // Chrome abandon the drag: dragstart fires, then
+                                                // dragend with dropEffect=none and no dragover
+                                                // anywhere, not even a document-level capture
+                                                // listener. Dragging by the icon escaped it only
+                                                // because the cursor sits left of the content area
+                                                // where nothing is inserted.
+                                                let ctx_deferred = ctx_ds.clone();
+                                                let payload = DragPayload::NewActivity(act_drag.clone());
+                                                request_animation_frame(move || {
+                                                    ctx_deferred.drag.set(Some(payload));
+                                                });
+                                            }
+                                            on:dragend=move |ev: web_sys::DragEvent| {
+                                                let eff = ev.data_transfer()
+                                                    .map(|dt| dt.drop_effect())
+                                                    .unwrap_or_default();
+                                                web_sys::console::log_1(
+                                                    &format!("[ml-dbg] dragend     dropEffect={eff}").into(),
+                                                );
+                                                ctx_de.drag.set(None);
+                                            }
+                                            on:keydown=move |ev: web_sys::KeyboardEvent| {
+                                                if ev.key() == "Enter" || ev.key() == " " {
+                                                    ev.prevent_default();
+                                                    ctx_key.set_active_activity(&pid_key, Some(act_key.clone()));
+                                                }
+                                            }
                                             on:click=move |_| {
                                         ctx.set_active_activity(&pid, Some(act_id.clone()));
                                     }>
+                                        // Neither span is a drag source: the row
+                                        // above owns the drag. Chrome resolves
+                                        // the source by walking up from the
+                                        // mousedown target, and the row is the
+                                        // only ancestor that is always rendered
+                                        // (the label is hover-gated).
                                         <span class=ActivityBarStyle::ICON_SLOT>
                                             {render_icon(&icon)}
                                         </span>
-                                        <span class=ActivityBarStyle::LABEL>{label.clone()}</span>
-                                    </button>
+                                        <span class=ActivityBarStyle::LABEL>
+                                            {label.clone()}
+                                        </span>
+                                    </div>
                                 }
                             }).collect::<Vec<_>>()
                         }
@@ -438,20 +547,69 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                                     } else {
                                                         String::new()
                                                     };
+                                                    // `div role=button` rather than
+                                                    // `<button>` so an HTML5 drag can
+                                                    // actually start — see the floating
+                                                    // branch above for why.
+                                                    let ctx_ds = ctx.clone();
+                                                    let ctx_de = ctx.clone();
+                                                    let ctx_key = ctx.clone();
+                                                    let act_drag = act_id.clone();
+                                                    let act_key = act_id.clone();
+                                                    let pid_key = pane_id.clone();
+                                                    let can_drag = ctx.new_pane.is_some();
                                                     let ctx = ctx.clone();
                                                     let pid = pane_id.clone();
                                                     let label = name.clone();
                                                     view! {
-                                                        <button class=ActivityBarStyle::BTN
+                                                        <div class=ActivityBarStyle::BTN
+                                                                role="button"
+                                                                tabindex="0"
                                                                 style=active_style
+                                                                draggable=can_drag.then_some("true")
+                                                                on:dragstart=move |ev| {
+                                                                    if !can_drag { return }
+                                                                    if let Some(dt) = ev.data_transfer() {
+                                                                        let _ = dt.set_data("text/plain", &act_drag.0);
+                                                                        dt.set_effect_allowed("copy");
+                                                                    }
+                                                                    // Deferred — see the floating branch for why
+                                                                    // mounting the overlays inside dragstart kills
+                                                                    // the drag.
+                                                                    let ctx_deferred = ctx_ds.clone();
+                                                                    let payload = DragPayload::NewActivity(act_drag.clone());
+                                                                    request_animation_frame(move || {
+                                                                        ctx_deferred.drag.set(Some(payload));
+                                                                    });
+                                                                }
+                                                                on:dragend=move |ev: web_sys::DragEvent| {
+                                                                    let eff = ev.data_transfer()
+                                                                        .map(|dt| dt.drop_effect())
+                                                                        .unwrap_or_default();
+                                                                    web_sys::console::log_1(
+                                                                        &format!("[ml-dbg] dragend     dropEffect={eff}").into(),
+                                                                    );
+                                                                    ctx_de.drag.set(None);
+                                                                }
+                                                                on:keydown=move |ev: web_sys::KeyboardEvent| {
+                                                                    if ev.key() == "Enter" || ev.key() == " " {
+                                                                        ev.prevent_default();
+                                                                        ctx_key.set_active_activity(&pid_key, Some(act_key.clone()));
+                                                                    }
+                                                                }
                                                                 on:click=move |_| {
                                                             ctx.set_active_activity(&pid, Some(act_id.clone()));
                                                         }>
+                                                            // Not drag sources — the
+                                                            // row owns the drag; see
+                                                            // the floating branch.
                                                             <span class=ActivityBarStyle::ICON_SLOT>
                                                                 {render_icon(&icon)}
                                                             </span>
-                                                            <span class=ActivityBarStyle::LABEL>{label.clone()}</span>
-                                                        </button>
+                                                            <span class=ActivityBarStyle::LABEL>
+                                                                {label.clone()}
+                                                            </span>
+                                                        </div>
                                                     }
                                                 }).collect::<Vec<_>>()}
                                             </div>
@@ -522,6 +680,36 @@ mod tests {
         assert!(
             !css.contains(".mullion-ab:hover"),
             "unguarded .mullion-ab:hover rule present in base CSS: {css}"
+        );
+    }
+
+    #[test]
+    fn dragging_modifier_holds_the_bar_open() {
+        let css = ActivityBarStyle::default().to_css();
+        // The bar must stay expanded while a drag is in flight — Chrome drops
+        // `:hover` when a native drag starts, so the hover rule alone would let
+        // the panel collapse and resize the drag source under the cursor.
+        assert!(
+            css.contains(".dragging"),
+            "expected a .dragging rule in base CSS, got: {css}"
+        );
+        // And it must not animate: a transitioning collapse is the same hazard,
+        // just spread over 150ms.
+        let dragging_block = css
+            .split(".dragging")
+            .nth(1)
+            .expect("`.dragging` rule present");
+        assert!(
+            dragging_block.contains("transition:none") || dragging_block.contains("transition: none"),
+            "expected transition:none in the .dragging rule, got: {dragging_block}"
+        );
+    }
+
+    #[test]
+    fn dragging_class_has_expected_name() {
+        assert_eq!(
+            ActivityBarStyle::class(&[ActivityBarModifier::Dragging]),
+            "mullion-ab dragging",
         );
     }
 

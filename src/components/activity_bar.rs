@@ -766,6 +766,37 @@ mod tests {
     use super::*;
     use css_styled::IntoCss;
 
+    /// Every class token in a stylesheet, without the leading dot.
+    ///
+    /// Hand-rolled rather than pulling in a regex dev-dependency for one test.
+    fn class_names(css: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let bytes: Vec<char> = css.chars().collect();
+        let mut i = 0;
+        while i < bytes.len() {
+            // A class selector, not a decimal like `.15s` in `transition` — CSS
+            // identifiers cannot begin with a digit.
+            let starts_ident = i + 1 < bytes.len()
+                && (bytes[i + 1].is_ascii_alphabetic() || bytes[i + 1] == '_' || bytes[i + 1] == '-');
+            if bytes[i] == '.' && starts_ident {
+                let start = i + 1;
+                let mut end = start;
+                while end < bytes.len()
+                    && (bytes[end].is_ascii_alphanumeric() || bytes[end] == '-' || bytes[end] == '_')
+                {
+                    end += 1;
+                }
+                if end > start {
+                    out.push(bytes[start..end].iter().collect());
+                }
+                i = end;
+            } else {
+                i += 1;
+            }
+        }
+        out
+    }
+
     #[test]
     fn collapsed_modifier_gates_hover_rules() {
         let css = ActivityBarStyle::default().to_css();
@@ -812,14 +843,22 @@ mod tests {
         // round: it took out BTN's rule, buttons fell back to browser chrome, and
         // the symptoms read as a styling disaster rather than a name collision.
         //
-        // Guard the invariant, not the count: no rule may be emitted under a
-        // selector built from another name plus a stray digit.
+        // Guard the shape of the failure, not a count and not one victim: a
+        // mis-substituted name always leaves a trailing digit welded onto another
+        // class, so NO class in the generated CSS may end in a digit. That catches
+        // the whole family (`…panel0`, `…panel1`, …) whichever index collides, and
+        // fires the moment someone adds an eleventh name — rather than when the
+        // stripe visibly disappears, which is how this was found the first time.
+        // Harmless once css-styled is fixed: it simply never fires.
         let css = ActivityBarStyle::default().to_css();
-        assert!(
-            !css.contains("-panel0"),
-            "a name was mis-substituted — the block has passed ten distinct \
-             SCREAMING_CASE names (modifiers included): {css}"
-        );
+        for class in class_names(&css) {
+            assert!(
+                !class.ends_with(|c: char| c.is_ascii_digit()),
+                "class `{class}` ends in a digit — a SCREAMING_CASE name was \
+                 mis-substituted, which means this block has passed ten distinct \
+                 names (modifiers count too):\n{css}"
+            );
+        }
         // And the classes the render actually attaches must be present.
         for expected in [
             ".mullion-ab-btn",

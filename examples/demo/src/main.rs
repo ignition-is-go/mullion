@@ -232,16 +232,19 @@ fn items() -> Vec<ActivityNode<DemoData>> {
                 }),
             ],
         }),
-        // A bare activity at the top level, positioned LAST — the gear at the
-        // bottom of the bar. Impossible before: activities outside a category
-        // always rendered above every category, and there was no `order` lever.
-        ActivityNode::activity(ActivityDef {
-            id: ActivityId::new("9"), name: "Settings".into(),
-            icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
-            filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
-            header: None,
-        }),
     ]
+}
+
+/// The bottom activity group — anchored to the foot of the bar rather than
+/// trailing the last category. Same shape as `items()`: nesting, categories and
+/// drag-to-create all work here identically.
+fn bottom_items() -> Vec<ActivityNode<DemoData>> {
+    vec![ActivityNode::activity(ActivityDef {
+        id: ActivityId::new("9"), name: "Settings".into(),
+        icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
+        filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
+        header: None,
+    })]
 }
 
 // ── Activity content views ───────────────────────────────────────────────────
@@ -408,11 +411,25 @@ fn App() -> impl IntoView {
         Some((id, DemoData { label: format!("Activity {}", activity.0), ..Default::default() }))
     });
 
+    // Host slots either side of the bottom activity group. Hairlines here, but
+    // the signature is the same as `pane_accessory`, so a host can render
+    // anything per pane — a session indicator, a status dot, a divider.
+    let rule = |color: &'static str| -> PaneAccessory {
+        Arc::new(move |_pane_id| {
+            view! { <div style=format!("height:1px;margin:4px 6px;background:{color}") /> }.into_any()
+        })
+    };
+    let bottom_leading = rule("var(--ml-border)");
+    let bottom_trailing = rule("var(--ml-border)");
+
     view! {
         <style>{demo_css}</style>
         <MullionProvider
             initial_tree=default_workspace()
             items=items()
+            bottom_items=bottom_items()
+            bottom_leading=bottom_leading
+            bottom_trailing=bottom_trailing
             on_event=on_event
             app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
             new_pane=new_pane

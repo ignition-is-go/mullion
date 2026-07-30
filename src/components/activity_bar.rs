@@ -261,12 +261,12 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 border-radius: 50%;
                 background: var(--ab-cat-color);
             }
-            /* CAT_BORDER is styled inline at its use site, not here.
-               css-styled resolves only the first SIX class identifiers per
-               `css!` block; a seventh is silently emitted as `<scope>-panel0`,
-               so its rule never matches anything. This block sits at exactly
-               six (PANEL, LABEL, ICON_SLOT, BTN, ICON, DOT) — adding another
-               will quietly break whichever one comes last. */
+            /* CAT_BORDER is styled inline at its use site, not here — see the
+               note on the stripe. This block is at exactly TEN distinct
+               SCREAMING_CASE names (SCOPE, PANEL, DRAGGING, LABEL, COLLAPSED,
+               AUTO_HIDE, ICON_SLOT, BTN, ICON, DOT), which is the last safe
+               count: css-styled mis-substitutes from the ELEVENTH onward.
+               Modifiers count too, which is easy to forget. */
         })
     }
 }
@@ -671,10 +671,10 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
             let rendered = self.nodes(children, depth + 1, Some(color), active);
             Some(view! {
                 <div style="position:relative">
-                    // Styled inline: this is the seventh class in the component
-                    // and css-styled only resolves six, so a `CAT_BORDER` rule in
-                    // the macro block never matches. Absolute, so it cannot add
-                    // layout of its own.
+                    // Styled inline because a `CAT_BORDER` rule in the `css!`
+                    // block would be the eleventh name and css-styled would
+                    // mis-substitute it (see the note in the block). Absolute, so
+                    // it cannot add layout of its own.
                     <div style=format!(
                         "position:absolute;left:0;top:0;bottom:0;width:var(--ab-cat-border-width);background:{}",
                         border_color)></div>
@@ -799,18 +799,26 @@ mod tests {
 
     #[test]
     fn every_class_identifier_resolves() {
-        // css-styled resolves only the first SIX class identifiers used in a
-        // `css!` block; a seventh is silently emitted as `<scope>-panel0`, so its
-        // rule matches nothing. That is how BTN lost its base styling — buttons
-        // fell back to browser chrome (white background, wrong font, wrapping
-        // labels) — and `cat_border`'s rule had never applied at all.
+        // css-styled substitutes each distinct SCREAMING_CASE name via a
+        // placeholder `css-s-{index}`, then replaces the one occurring earliest,
+        // comparing with a strict `pos < earliest`. `css-s-1` is a *prefix* of
+        // `css-s-10`: both match at the same offset, index 1 is visited first,
+        // so index 1 wins and consumes only its own 7 characters — leaving the
+        // trailing digit in the output as a literal.
         //
-        // Guard the invariant rather than the symptom: no generated fallback
-        // selector may appear.
+        // So the eleventh distinct name emits as `<name-at-index-1's-class>0`,
+        // the twelfth as `...1`, and so on. Here index 1 is PANEL, which is why
+        // the breakage showed up as `.mullion-ab-panel0`. It cost a debugging
+        // round: it took out BTN's rule, buttons fell back to browser chrome, and
+        // the symptoms read as a styling disaster rather than a name collision.
+        //
+        // Guard the invariant, not the count: no rule may be emitted under a
+        // selector built from another name plus a stray digit.
         let css = ActivityBarStyle::default().to_css();
         assert!(
             !css.contains("-panel0"),
-            "a class identifier failed to resolve (over the six-per-block limit): {css}"
+            "a name was mis-substituted — the block has passed ten distinct \
+             SCREAMING_CASE names (modifiers included): {css}"
         );
         // And the classes the render actually attaches must be present.
         for expected in [

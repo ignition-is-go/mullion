@@ -51,6 +51,11 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// categories, where a category holds another such list. Position is the
     /// order — to put an activity last, put it last.
     items: Vec<ActivityNode<D>>,
+    /// A second activity group, anchored to the bottom of the bar. Same shape as
+    /// `items`; renders in the bottom region instead of the top, which is where
+    /// settings-like entries belong. Default: none.
+    #[prop(optional)]
+    bottom_items: Vec<ActivityNode<D>>,
     /// Called for every pane event (split, close, move, resize, etc.).
     on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
     /// Optional upstream signal to update the tree live from server queries.
@@ -66,6 +71,13 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
+    /// Host slot rendered immediately *before* the bottom activity group.
+    #[prop(optional)]
+    bottom_leading: Option<PaneAccessory>,
+    /// Host slot rendered immediately *after* the bottom activity group, above
+    /// `pane_accessory` and the built-in split/close controls.
+    #[prop(optional)]
+    bottom_trailing: Option<PaneAccessory>,
     /// Whether panes render their header band (the active activity's title).
     /// Default: `true`.
     #[prop(default = true)]
@@ -112,6 +124,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     let ctx = MullionContext::new(
         initial_tree,
         items,
+        bottom_items,
         on_event,
         theme,
         mullion_style,
@@ -128,6 +141,8 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         hide_activity_bar,
         auto_hide_activity_bar,
         new_pane,
+        bottom_leading,
+        bottom_trailing,
     );
 
     if let Some(upstream_sig) = upstream {
@@ -156,6 +171,11 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// categories, where a category holds another such list. Position is the
     /// order — to put an activity last, put it last.
     items: Vec<ActivityNode<D>>,
+    /// A second activity group, anchored to the bottom of the bar. Same shape as
+    /// `items`; renders in the bottom region instead of the top, which is where
+    /// settings-like entries belong. Default: none.
+    #[prop(optional)]
+    bottom_items: Vec<ActivityNode<D>>,
     /// Called for every pane event.
     on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
     /// Optional upstream signal.
@@ -171,6 +191,13 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
+    /// Host slot rendered immediately *before* the bottom activity group.
+    #[prop(optional)]
+    bottom_leading: Option<PaneAccessory>,
+    /// Host slot rendered immediately *after* the bottom activity group, above
+    /// `pane_accessory` and the built-in split/close controls.
+    #[prop(optional)]
+    bottom_trailing: Option<PaneAccessory>,
     /// Whether panes render their header band (the active activity's title).
     /// Default: `true`.
     #[prop(default = true)]
@@ -216,6 +243,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     let ctx = MullionContext::new(
         initial_tree,
         items,
+        bottom_items,
         on_event,
         theme,
         mullion_style,
@@ -232,6 +260,8 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         hide_activity_bar,
         auto_hide_activity_bar,
         new_pane,
+        bottom_leading,
+        bottom_trailing,
     );
 
     if let Some(upstream_sig) = upstream {

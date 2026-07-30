@@ -102,6 +102,12 @@ pub struct MullionContext<D: PaneData> {
     /// The registered item tree, in render order. The activity bar walks this;
     /// `activities` and `categories` are flattened views of it for lookup.
     pub(crate) items: StoredValue<Vec<ActivityNode<D>>>,
+    /// A second item tree, anchored to the bottom of the bar. Same shape and
+    /// same behaviour as `items` — activities, categories, arbitrary nesting —
+    /// it just renders in the bottom region instead of the top. This is where
+    /// settings-like entries go so they sit at the foot of the bar rather than
+    /// trailing the last category.
+    pub(crate) bottom_items: StoredValue<Vec<ActivityNode<D>>>,
     pub(crate) activities: StoredValue<Vec<ActivityWithCategory<D>>>,
     /// Category metadata (without children), in registration (pre-order) order.
     pub(crate) categories: StoredValue<Vec<CategoryMeta>>,
@@ -132,6 +138,11 @@ pub struct MullionContext<D: PaneData> {
     pub pane_accessory: Option<PaneAccessory>,
     /// Optional host-provided per-pane bottom-border color (e.g. session color).
     pub pane_border_color: Option<PaneBorderColor>,
+    /// Host slot rendered immediately *before* the bottom activity group.
+    pub bottom_leading: Option<PaneAccessory>,
+    /// Host slot rendered immediately *after* the bottom activity group, above
+    /// `pane_accessory` and the built-in split/close controls.
+    pub bottom_trailing: Option<PaneAccessory>,
     /// Whether each pane renders its header band (the active activity's title).
     /// `false` suppresses it entirely — useful when the host drives navigation
     /// itself and the title is redundant. Defaults to `true`.
@@ -156,6 +167,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     pub fn new(
         initial_tree: PaneNode<D>,
         items: Vec<ActivityNode<D>>,
+        bottom_items: Vec<ActivityNode<D>>,
         event_handler: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
         theme: MullionTheme,
         mullion_style: MullionStyle,
@@ -172,13 +184,13 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         hide_activity_bar: Option<PaneHideActivityBar<D>>,
         auto_hide_activity_bar: Option<PaneAutoHideActivityBar<D>>,
         new_pane: Option<PaneFactory<D>>,
+        bottom_leading: Option<PaneAccessory>,
+        bottom_trailing: Option<PaneAccessory>,
     ) -> Self {
         // Flatten the item tree for lookup, keeping the tree itself for render.
         // Both come out in pre-order, so "sorted" is just registration order —
         // there is no `order` field to sort by any more.
-        let mut cat_metas = Vec::new();
-        let mut all_activities = Vec::new();
-        flatten_items(&items, &mut Vec::new(), &mut cat_metas, &mut all_activities);
+        let (cat_metas, all_activities) = flatten_groups(&items, &bottom_items);
 
         // Seed the ratio signal map from the initial tree's splits.
         let mut initial_ratios = Vec::new();
@@ -192,6 +204,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             tree: RwSignal::new(initial_tree),
             ratios: StoredValue::new(ratio_map),
             items: StoredValue::new(items),
+            bottom_items: StoredValue::new(bottom_items),
             activities: StoredValue::new(all_activities),
             categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
@@ -208,6 +221,8 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             app_icon,
             pane_accessory,
             pane_border_color,
+            bottom_leading,
+            bottom_trailing,
             show_pane_header,
             hide_activity_bar,
             auto_hide_activity_bar,
@@ -571,7 +586,25 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     }
 }
 
-/// Walk the registered item tree, collecting a flat list of categories and of
+/// Flatten both activity groups into the lookup tables the rest of the crate
+/// reads.
+///
+/// Both groups must land here, not just the top one: `PaneContent` resolves a
+/// pane's active activity through `activities`, so a bottom activity missing
+/// from it would render as "activity not found". Top group first, so the
+/// flattened order matches the visual order down the bar.
+fn flatten_groups<D: PaneData>(
+    top: &[ActivityNode<D>],
+    bottom: &[ActivityNode<D>],
+) -> (Vec<CategoryMeta>, Vec<ActivityWithCategory<D>>) {
+    let mut cats = Vec::new();
+    let mut acts = Vec::new();
+    flatten_items(top, &mut Vec::new(), &mut cats, &mut acts);
+    flatten_items(bottom, &mut Vec::new(), &mut cats, &mut acts);
+    (cats, acts)
+}
+
+/// Walk one registered item tree, collecting a flat list of categories and of
 /// activities-with-their-ancestor-path.
 ///
 /// `path` is the stack of enclosing category ids, outermost first; it is pushed
@@ -717,5 +750,34 @@ mod tests {
         assert_eq!(path("inside"), vec![CategoryId::new("first")]);
         assert!(path("after").is_empty(), "sibling after a category is top-level");
         assert_eq!(path("deep-in-second"), vec![CategoryId::new("second")]);
+    }
+
+    #[test]
+    fn both_groups_flatten_into_the_lookup_tables() {
+        // The bottom group is not decorative: `PaneContent` resolves a pane's
+        // active activity through `activities`, so an entry only reachable from
+        // `bottom_items` would render as "activity not found" if it were skipped.
+        let top = vec![cat("explorer", vec![ActivityNode::activity(act("files"))])];
+        let bottom = vec![
+            ActivityNode::activity(act("settings")),
+            cat("admin", vec![ActivityNode::activity(act("users"))]),
+        ];
+        let (cats, acts) = flatten_groups(&top, &bottom);
+
+        assert_eq!(
+            acts.iter().map(|a| a.def.id.0.as_str()).collect::<Vec<_>>(),
+            vec!["files", "settings", "users"],
+            "top group first, so flattened order matches the order down the bar"
+        );
+        assert_eq!(
+            cats.iter().map(|c| c.id.0.as_str()).collect::<Vec<_>>(),
+            vec!["explorer", "admin"]
+        );
+        // Nesting works the same in either group.
+        let users = acts.iter().find(|a| a.def.id == ActivityId::new("users")).unwrap();
+        assert_eq!(users.path, vec![CategoryId::new("admin")]);
+        // And a bare bottom entry is still top-level, not parented to anything.
+        let settings = acts.iter().find(|a| a.def.id == ActivityId::new("settings")).unwrap();
+        assert!(settings.path.is_empty());
     }
 }

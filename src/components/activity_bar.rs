@@ -304,6 +304,14 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
             .with_value(|items| filter_nodes(items, &d))
     });
 
+    let ctx_for_bottom = ctx.clone();
+    let bottom_bar_items = Memo::new(move |_| {
+        let d = data.get();
+        ctx_for_bottom
+            .bottom_items
+            .with_value(|items| filter_nodes(items, &d))
+    });
+
     let ctx_for_active = ctx.clone();
     let pid_for_active = pane_id.clone();
     let active_activity = Memo::new(move |_| {
@@ -336,6 +344,15 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         expanded,
         active_opacity: style.icon_active_opacity.clone(),
     };
+    // Same renderer for the bottom group — nesting, cards and drag all behave
+    // identically there; only the anchor differs. Expansion state is shared, so
+    // a category is open or closed regardless of which group it sits in.
+    let bottom_renderer = BarRender {
+        ctx: ctx.clone(),
+        pane_id: pane_id.clone(),
+        expanded,
+        active_opacity: style.icon_active_opacity.clone(),
+    };
 
     let ctx_actions = ctx.clone();
 
@@ -343,6 +360,10 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     // `ctx` is moved into the item closure below.
     let pane_accessory = ctx.pane_accessory.clone();
     let pid_accessory = pane_id.clone();
+    let bottom_leading = ctx.bottom_leading.clone();
+    let pid_leading = pane_id.clone();
+    let bottom_trailing = ctx.bottom_trailing.clone();
+    let pid_trailing = pane_id.clone();
 
     // Reactive on `drag`: while a drag is in flight the bar gets the `dragging`
     // modifier so it stays open (see the CSS for why that is load-bearing, not
@@ -403,8 +424,16 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                         renderer.nodes(&bar_items.get(), 0, None, active.as_ref())
                     }}
                 </div>
-                // Pane actions (bottom)
+                // Bottom region, in render order: leading slot, the bottom
+                // activity group, trailing slot, the host's pane accessory, then
+                // the built-in pane actions.
                 <div>
+                    {bottom_leading.map(move |f| f(pid_leading.clone()))}
+                    {move || {
+                        let active = active_activity.get();
+                        bottom_renderer.nodes(&bottom_bar_items.get(), 0, None, active.as_ref())
+                    }}
+                    {bottom_trailing.map(move |f| f(pid_trailing.clone()))}
                     // Host-provided per-pane chrome (session indicator, etc.),
                     // anchored above the split/close controls.
                     {pane_accessory.map(move |f| f(pid_accessory.clone()))}

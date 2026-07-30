@@ -131,103 +131,116 @@ impl Default for DemoData {
     }
 }
 
-fn categories() -> Vec<Category<DemoData>> {
+fn items() -> Vec<ActivityNode<DemoData>> {
     vec![
-        Category {
-            id: CategoryId::new("0"), name: "Explorer".into(), order: 0,
+        ActivityNode::Category(Category {
+            id: CategoryId::new("0"), name: "Explorer".into(),
             icon: ActivityIcon::Svg(outlined::ICON_FOLDER.into()),
             color: "#75beff".into(),
-            activities: vec![
-                ActivityDef {
+            children: vec![
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("1"), name: "Files".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_DESCRIPTION.into()),
                     filter: |d| d.show_files, render: |_pid, data| view! { <FilesActivity data=data /> }.into_any(),
                     // Showcase: custom header content beside the "Files" name —
                     // here, the pane's label, reactive to this pane's data.
                     header: Some(|_pid, data| view! { <span style="opacity:0.6">{move || data.get().label}</span> }.into_any()),
-                },
-                ActivityDef {
+                }),
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("2"), name: "Open Editors".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_ARTICLE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Open Editors" /> }.into_any(),
                     header: None,
-                },
-                ActivityDef {
+                }),
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("3"), name: "Timeline".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_TIMELINE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Timeline" /> }.into_any(),
                     header: None,
-                },
-                ActivityDef {
+                }),
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("4"), name: "Outline".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_LIST.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Outline" /> }.into_any(),
                     header: None,
-                },
+                }),
             ],
-        },
-        Category {
-            id: CategoryId::new("1"), name: "Edit".into(), order: 1,
+        }),
+        ActivityNode::Category(Category {
+            id: CategoryId::new("1"), name: "Edit".into(),
             icon: ActivityIcon::Svg(outlined::ICON_EDIT_NOTE.into()),
             color: "#e8ab53".into(),
-            activities: vec![
-                ActivityDef {
+            children: vec![
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("5"), name: "Search".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_SEARCH.into()),
                     filter: |d| d.show_search, render: |_pid, data| view! { <SearchActivity data=data /> }.into_any(),
                     header: None,
-                },
-                ActivityDef {
+                }),
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("6"), name: "Replace".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_FIND_REPLACE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Replace" /> }.into_any(),
                     header: None,
-                },
-                ActivityDef {
+                }),
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("7"), name: "Bookmarks".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_BOOKMARKS.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Bookmarks" /> }.into_any(),
                     header: None,
-                },
-                ActivityDef {
+                }),
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("8"), name: "Snippets".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_CODE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Snippets" /> }.into_any(),
                     header: None,
-                },
+                }),
             ],
-        },
-        Category {
-            id: CategoryId::new("2"), name: "Preferences".into(), order: 2,
+        }),
+        ActivityNode::Category(Category {
+            id: CategoryId::new("2"), name: "Preferences".into(),
             icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
             color: "#c586c0".into(),
-            activities: vec![
-                ActivityDef {
-                    id: ActivityId::new("9"), name: "Settings".into(),
-                    icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
-                    filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
-                    header: None,
-                },
-                ActivityDef {
+            children: vec![
+                ActivityNode::activity(ActivityDef {
                     id: ActivityId::new("10"), name: "Themes".into(),
                     icon: ActivityIcon::Svg(outlined::ICON_PALETTE.into()),
                     filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Themes" /> }.into_any(),
                     header: None,
-                },
-                ActivityDef {
-                    id: ActivityId::new("11"), name: "Keybindings".into(),
-                    icon: ActivityIcon::Svg(outlined::ICON_KEYBOARD.into()),
-                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Keybindings" /> }.into_any(),
-                    header: None,
-                },
-                ActivityDef {
-                    id: ActivityId::new("12"), name: "Extensions".into(),
-                    icon: ActivityIcon::Svg(outlined::ICON_EXTENSION.into()),
-                    filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Extensions" /> }.into_any(),
-                    header: None,
-                },
+                }),
+                // A category nested inside a category — arbitrary depth. Its
+                // children inherit *this* colour for their active state, not
+                // Preferences'.
+                ActivityNode::Category(Category {
+                    id: CategoryId::new("3"), name: "Advanced".into(),
+                    icon: ActivityIcon::Svg(outlined::ICON_TUNE.into()),
+                    color: "#e8ab53".into(),
+                    children: vec![
+                        ActivityNode::activity(ActivityDef {
+                            id: ActivityId::new("11"), name: "Keybindings".into(),
+                            icon: ActivityIcon::Svg(outlined::ICON_KEYBOARD.into()),
+                            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Keybindings" /> }.into_any(),
+                            header: None,
+                        }),
+                        ActivityNode::activity(ActivityDef {
+                            id: ActivityId::new("12"), name: "Extensions".into(),
+                            icon: ActivityIcon::Svg(outlined::ICON_EXTENSION.into()),
+                            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Extensions" /> }.into_any(),
+                            header: None,
+                        }),
+                    ],
+                }),
             ],
-        },
+        }),
+        // A bare activity at the top level, positioned LAST — the gear at the
+        // bottom of the bar. Impossible before: activities outside a category
+        // always rendered above every category, and there was no `order` lever.
+        ActivityNode::activity(ActivityDef {
+            id: ActivityId::new("9"), name: "Settings".into(),
+            icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
+            filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
+            header: None,
+        }),
     ]
 }
 
@@ -399,7 +412,7 @@ fn App() -> impl IntoView {
         <style>{demo_css}</style>
         <MullionProvider
             initial_tree=default_workspace()
-            categories=categories()
+            items=items()
             on_event=on_event
             app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
             new_pane=new_pane

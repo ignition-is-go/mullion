@@ -261,12 +261,14 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 border-radius: 50%;
                 background: var(--ab-cat-color);
             }
-            /* CAT_BORDER is styled inline at its use site, not here — see the
-               note on the stripe. This block is at exactly TEN distinct
-               SCREAMING_CASE names (SCOPE, PANEL, DRAGGING, LABEL, COLLAPSED,
-               AUTO_HIDE, ICON_SLOT, BTN, ICON, DOT), which is the last safe
-               count: css-styled mis-substitutes from the ELEVENTH onward.
-               Modifiers count too, which is easy to forget. */
+            CAT_BORDER {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: var(--ab-cat-border-width);
+                background: var(--ab-cat-color);
+            }
         })
     }
 }
@@ -671,13 +673,8 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
             let rendered = self.nodes(children, depth + 1, Some(color), active);
             Some(view! {
                 <div style="position:relative">
-                    // Styled inline because a `CAT_BORDER` rule in the `css!`
-                    // block would be the eleventh name and css-styled would
-                    // mis-substitute it (see the note in the block). Absolute, so
-                    // it cannot add layout of its own.
-                    <div style=format!(
-                        "position:absolute;left:0;top:0;bottom:0;width:var(--ab-cat-border-width);background:{}",
-                        border_color)></div>
+                    <div class=ActivityBarStyle::CAT_BORDER
+                         style=ActivityBarInternal::vars(|v| v.category_color(&border_color))></div>
                     {rendered}
                 </div>
             })
@@ -797,6 +794,7 @@ mod tests {
         out
     }
 
+
     #[test]
     fn collapsed_modifier_gates_hover_rules() {
         let css = ActivityBarStyle::default().to_css();
@@ -867,6 +865,11 @@ mod tests {
             ".mullion-ab-dot",
             ".mullion-ab-icon",
             ".mullion-ab-panel {",
+            // The eleventh name in this block, and the one the collision used to
+            // eat. Its presence proves the resolved css-styled rev actually
+            // contains the padding fix — an unpinned git dependency cannot tell
+            // you that on its own.
+            ".mullion-ab-cat-border",
         ] {
             assert!(css.contains(expected), "missing {expected} in base CSS: {css}");
         }

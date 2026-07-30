@@ -601,7 +601,48 @@ fn flatten_groups<D: PaneData>(
     let mut acts = Vec::new();
     flatten_items(top, &mut Vec::new(), &mut cats, &mut acts);
     flatten_items(bottom, &mut Vec::new(), &mut cats, &mut acts);
+    debug_assert_unique_ids(&cats, &acts);
     (cats, acts)
+}
+
+/// Panics in debug builds if an activity or category id is registered twice.
+///
+/// Ids are the identity everything else resolves through, and every lookup takes
+/// the first match: `PaneContent` picks a pane's activity with `.find()`,
+/// category expansion state is keyed by `CategoryId`, and a persisted pane stores
+/// only an `ActivityId` to be re-derived later. So a duplicate never errors — the
+/// bar renders both entries, they select each other because they share an id, and
+/// the pane shows whichever was registered first. A copy-pasted registration is
+/// the usual way in, and two groups (`items` and `bottom_items`) make it easier
+/// to hit, since the collision can span groups where no single list looks wrong.
+///
+/// `debug_assert` rather than a hard panic: registration is host data and a
+/// release build should not die over it, while dev and test builds get the loud
+/// failure at the point it is cheap to fix. Costs nothing in release.
+fn debug_assert_unique_ids<D: PaneData>(cats: &[CategoryMeta], acts: &[ActivityWithCategory<D>]) {
+    if cfg!(debug_assertions) {
+        let mut seen = std::collections::HashSet::new();
+        let dup_act: Vec<&str> = acts
+            .iter()
+            .filter(|a| !seen.insert(&a.def.id.0))
+            .map(|a| a.def.id.0.as_str())
+            .collect();
+        debug_assert!(
+            dup_act.is_empty(),
+            "activity id registered more than once: {dup_act:?} — ids are resolved              by first match, so duplicates render as separate bar entries that              select each other"
+        );
+
+        let mut seen = std::collections::HashSet::new();
+        let dup_cat: Vec<&str> = cats
+            .iter()
+            .filter(|c| !seen.insert(&c.id.0))
+            .map(|c| c.id.0.as_str())
+            .collect();
+        debug_assert!(
+            dup_cat.is_empty(),
+            "category id registered more than once: {dup_cat:?} — expansion state              is keyed by id, so duplicates open and close together"
+        );
+    }
 }
 
 /// Walk one registered item tree, collecting a flat list of categories and of
@@ -779,5 +820,49 @@ mod tests {
         // And a bare bottom entry is still top-level, not parented to anything.
         let settings = acts.iter().find(|a| a.def.id == ActivityId::new("settings")).unwrap();
         assert!(settings.path.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "activity id registered more than once")]
+    fn duplicate_activity_id_across_groups_is_caught() {
+        // The copy-paste case, and the one two groups make easy: neither list
+        // looks wrong on its own. Without the guard this renders two bar entries
+        // that select each other, and the pane resolves whichever came first.
+        let top = vec![ActivityNode::activity(act("settings"))];
+        let bottom = vec![ActivityNode::activity(act("settings"))];
+        flatten_groups(&top, &bottom);
+    }
+
+    #[test]
+    #[should_panic(expected = "activity id registered more than once")]
+    fn duplicate_activity_id_within_a_group_is_caught() {
+        let top = vec![
+            cat("explorer", vec![ActivityNode::activity(act("files"))]),
+            ActivityNode::activity(act("files")),
+        ];
+        flatten_groups(&top, &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "category id registered more than once")]
+    fn duplicate_category_id_is_caught() {
+        // Expansion state is keyed by CategoryId, so duplicates would open and
+        // close in lockstep.
+        let top = vec![
+            cat("tools", vec![ActivityNode::activity(act("a"))]),
+            cat("tools", vec![ActivityNode::activity(act("b"))]),
+        ];
+        flatten_groups(&top, &[]);
+    }
+
+    #[test]
+    fn distinct_ids_across_groups_are_fine() {
+        // The guard must not fire on the ordinary case — an activity and a
+        // category may share a *name*, and ids are namespaced separately.
+        let top = vec![cat("settings", vec![ActivityNode::activity(act("themes"))])];
+        let bottom = vec![ActivityNode::activity(act("settings-page"))];
+        let (cats, acts) = flatten_groups(&top, &bottom);
+        assert_eq!(cats.len(), 1);
+        assert_eq!(acts.len(), 2);
     }
 }

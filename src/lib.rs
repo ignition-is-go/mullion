@@ -7,7 +7,7 @@ pub mod theme;
 pub mod tree;
 pub mod workspace;
 
-pub use activity::{ActivityDef, ActivityIcon, ActivityRender, Category};
+pub use activity::{ActivityDef, ActivityIcon, ActivityNode, ActivityRender, Category};
 pub use components::activity_bar::{ActivityBarBehavior, ActivityBarModifier, ActivityBarStyle};
 pub use components::drop_overlay::DropOverlayStyle;
 pub use components::mullion_root::MullionStyle;

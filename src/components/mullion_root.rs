@@ -2,7 +2,7 @@ use leptos::prelude::*;
 
 use css_styled::{IntoCss, IntoThemeCss};
 
-use crate::activity::Category;
+use crate::activity::ActivityNode;
 use crate::context::{MullionContext, PaneAccessory, PaneBorderColor};
 use crate::events::PaneEvent;
 use crate::theme::MullionTheme;
@@ -47,8 +47,10 @@ impl css_styled::StyledComponentBase for MullionStyle {
 pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// The initial pane tree layout.
     initial_tree: PaneNode<D>,
-    /// Categories with their activities.
-    categories: Vec<Category<D>>,
+    /// The activity bar's contents: an ordered list of activities and
+    /// categories, where a category holds another such list. Position is the
+    /// order — to put an activity last, put it last.
+    items: Vec<ActivityNode<D>>,
     /// Called for every pane event (split, close, move, resize, etc.).
     on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
     /// Optional upstream signal to update the tree live from server queries.
@@ -64,10 +66,6 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
-    /// Activities registered outside any category — rendered as top-level icons
-    /// in every activity bar, above the categories. Default: none.
-    #[prop(optional)]
-    floating_activities: Vec<crate::activity::ActivityDef<D>>,
     /// Whether panes render their header band (the active activity's title).
     /// Default: `true`.
     #[prop(default = true)]
@@ -113,8 +111,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
 
     let ctx = MullionContext::new(
         initial_tree,
-        categories,
-        floating_activities,
+        items,
         on_event,
         theme,
         mullion_style,
@@ -155,8 +152,10 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
 pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// The initial pane tree layout.
     initial_tree: PaneNode<D>,
-    /// Categories with their activities.
-    categories: Vec<Category<D>>,
+    /// The activity bar's contents: an ordered list of activities and
+    /// categories, where a category holds another such list. Position is the
+    /// order — to put an activity last, put it last.
+    items: Vec<ActivityNode<D>>,
     /// Called for every pane event.
     on_event: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
     /// Optional upstream signal.
@@ -172,10 +171,6 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
-    /// Activities registered outside any category — rendered as top-level icons
-    /// in every activity bar, above the categories. Default: none.
-    #[prop(optional)]
-    floating_activities: Vec<crate::activity::ActivityDef<D>>,
     /// Whether panes render their header band (the active activity's title).
     /// Default: `true`.
     #[prop(default = true)]
@@ -220,8 +215,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
 
     let ctx = MullionContext::new(
         initial_tree,
-        categories,
-        floating_activities,
+        items,
         on_event,
         theme,
         mullion_style,

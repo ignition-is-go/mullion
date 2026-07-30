@@ -3,17 +3,74 @@ use serde::{Deserialize, Serialize};
 
 use crate::tree::{ActivityId, CategoryId, PaneData, PaneId};
 
-/// A category of activities, containing its activity definitions.
+/// One entry in the activity bar, at any depth.
+///
+/// The bar is registered as an ordered list of these, and a category holds
+/// another list of the same — so an activity can sit at the top level beside
+/// categories, or nested arbitrarily deep inside them.
+///
+/// **Position is the order.** There is no `order` field anywhere in this tree;
+/// entries render in the order given. To put a settings activity last, put it
+/// last.
+///
+/// ```ignore
+/// use mullion::{ActivityNode, Category, ActivityDef};
+///
+/// let items = vec![
+///     ActivityNode::Category(Category {
+///         id: CategoryId::new("explorer"),
+///         name: "Explorer".into(),
+///         icon: folder_icon(),
+///         color: "#75beff".into(),
+///         children: vec![
+///             ActivityNode::activity(files),
+///             ActivityNode::activity(outline),
+///         ],
+///     }),
+///     // A bare activity at the top level — no category wrapper, no
+///     // expand-to-reveal-one-child step.
+///     ActivityNode::activity(settings),
+/// ];
+/// ```
+pub enum ActivityNode<D: PaneData> {
+    Activity(ActivityDef<D>),
+    Category(Category<D>),
+}
+
+impl<D: PaneData> ActivityNode<D> {
+    /// Wrap an activity as a node. Shorter than `ActivityNode::Activity(..)` at
+    /// the call site, where these nest several deep.
+    pub fn activity(def: ActivityDef<D>) -> Self {
+        ActivityNode::Activity(def)
+    }
+
+    /// Wrap a category as a node.
+    pub fn category(cat: Category<D>) -> Self {
+        ActivityNode::Category(cat)
+    }
+}
+
+impl<D: PaneData> Clone for ActivityNode<D> {
+    fn clone(&self) -> Self {
+        match self {
+            ActivityNode::Activity(a) => ActivityNode::Activity(a.clone()),
+            ActivityNode::Category(c) => ActivityNode::Category(c.clone()),
+        }
+    }
+}
+
+/// A category of activities. Holds [`ActivityNode`]s, so it can contain
+/// activities, further categories, or a mix.
 pub struct Category<D: PaneData> {
     pub id: CategoryId,
     pub name: String,
-    pub order: u32,
     /// Icon for the category header.
     pub icon: ActivityIcon,
-    /// Color for the category (used for active indicators, borders, etc.).
+    /// Color for the category. Used for its active indicator and border, and
+    /// inherited by descendant activities that have no nearer category.
     pub color: String,
-    /// Activities in this category.
-    pub activities: Vec<ActivityDef<D>>,
+    /// Entries in this category, in render order.
+    pub children: Vec<ActivityNode<D>>,
 }
 
 impl<D: PaneData> Clone for Category<D> {
@@ -21,20 +78,18 @@ impl<D: PaneData> Clone for Category<D> {
         Category {
             id: self.id.clone(),
             name: self.name.clone(),
-            order: self.order,
             icon: self.icon.clone(),
             color: self.color.clone(),
-            activities: self.activities.clone(),
+            children: self.children.clone(),
         }
     }
 }
 
-/// Serializable category metadata (without activities, for internal use).
+/// Serializable category metadata (without children, for internal use).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CategoryMeta {
     pub id: CategoryId,
     pub name: String,
-    pub order: u32,
     pub icon: ActivityIcon,
     pub color: String,
 }
@@ -117,12 +172,15 @@ impl<D: PaneData> Clone for ActivityDef<D> {
     }
 }
 
-/// Internal representation pairing an activity with its category id. `category`
-/// is `None` for a free-floating activity (registered outside any category —
-/// rendered as a top-level icon in the activity bar).
+/// Internal representation pairing an activity with where it sits in the tree.
+///
+/// `path` is its ancestor categories, outermost first — empty for a top-level
+/// activity. `category` is the nearest ancestor (the last element of `path`),
+/// which is the one whose colour the activity inherits.
 pub struct ActivityWithCategory<D: PaneData> {
     pub def: ActivityDef<D>,
     pub category: Option<CategoryId>,
+    pub path: Vec<CategoryId>,
 }
 
 impl<D: PaneData> Clone for ActivityWithCategory<D> {
@@ -130,6 +188,7 @@ impl<D: PaneData> Clone for ActivityWithCategory<D> {
         ActivityWithCategory {
             def: self.def.clone(),
             category: self.category.clone(),
+            path: self.path.clone(),
         }
     }
 }

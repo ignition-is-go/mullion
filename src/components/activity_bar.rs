@@ -1,11 +1,26 @@
+use std::collections::HashSet;
+
 use leptos::prelude::*;
 
-use crate::activity::ActivityIcon;
+use crate::activity::{ActivityIcon, ActivityNode};
 use crate::context::MullionContext;
 use crate::drag::DragPayload;
 use crate::theme::MullionTheme;
 use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
 
+
+/// Colour of the *active* floating activity's icon.
+///
+/// Floating activities are registered outside any category, so unlike categorised
+/// ones they have no `Category::color` to borrow for their active state. Hosts can
+/// colour-code them by defining `--ab-float-active-color`; otherwise this falls
+/// back to the primary text colour.
+///
+/// Deliberately a foreground colour. This was `theme.accent`, which is a
+/// *background* by contract — documented as "active tabs, hover backgrounds",
+/// defaulted to `#222222`, and used elsewhere only as `--ws-btn-bg` — so the
+/// active floating icon rendered invisible against the bar.
+const FLOAT_ACTIVE_COLOR: &str = "var(--ab-float-active-color, var(--ml-text))";
 
 /// Internal CSS variables for the activity bar — not exposed to consumers.
 #[derive(css_styled::CssVars)]
@@ -85,6 +100,23 @@ pub struct ActivityBarStyle {
     pub icon_active_opacity: String,
     #[prop(var = "--ab-cat-border-width", default = "2px")]
     pub category_border_width: String,
+    /// Background of an *open* category's card.
+    ///
+    /// Must be translucent: nested categories render nested cards, so the alpha
+    /// composites and each level reads a step stronger than its parent without
+    /// needing per-depth colours. A solid colour would flatten that to one tone.
+    /// The default suits mullion's dark defaults; light-theme hosts should
+    /// override with a dark translucent instead.
+    #[prop(var = "--ab-cat-card-bg", default = "rgba(255,255,255,0.045)")]
+    pub category_card_background: String,
+    /// Hairline at the top of an *open* category's card, marking where the group
+    /// starts. Translucent for the same reason as the card fill.
+    #[prop(var = "--ab-cat-edge", default = "rgba(255,255,255,0.08)")]
+    pub category_edge: String,
+    /// Label colour on category rows. Muted by default, so a category reads as a
+    /// grouping rather than a destination.
+    #[prop(var = "--ab-cat-label-color", default = theme.text_muted)]
+    pub category_label_color: String,
 }
 
 impl css_styled::StyledComponentBase for ActivityBarStyle {
@@ -229,14 +261,12 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 border-radius: 50%;
                 background: var(--ab-cat-color);
             }
-            CAT_BORDER {
-                position: absolute;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                width: var(--ab-cat-border-width);
-                background: var(--ab-cat-color);
-            }
+            /* CAT_BORDER is styled inline at its use site, not here.
+               css-styled resolves only the first SIX class identifiers per
+               `css!` block; a seventh is silently emitted as `<scope>-panel0`,
+               so its rule never matches anything. This block sits at exactly
+               six (PANEL, LABEL, ICON_SLOT, BTN, ICON, DOT) — adding another
+               will quietly break whichever one comes last. */
         })
     }
 }
@@ -257,51 +287,19 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     auto_hide: bool,
 ) -> impl IntoView {
     let style = ctx.activity_bar_style.clone();
-    let (expanded_cat, set_expanded_cat) = signal(Option::<CategoryId>::None);
 
-    let ctx_for_memo = ctx.clone();
-    let grouped = Memo::new(move |_| {
+    // Which categories are open. A set rather than a single id because the tree
+    // nests: opening a child must not close its parent, or the child would
+    // vanish along with it.
+    let expanded = RwSignal::new(HashSet::<CategoryId>::new());
+
+    // This pane's slice of the registered tree, filtered by its data.
+    let ctx_for_items = ctx.clone();
+    let bar_items = Memo::new(move |_| {
         let d = data.get();
-        let acts = ctx_for_memo.activities_for_pane(&d);
-        let cats = ctx_for_memo.sorted_categories();
-
-        let mut groups: Vec<(
-            CategoryId,
-            String,
-            ActivityIcon,
-            String,
-            Vec<(ActivityId, String, ActivityIcon)>,
-        )> = Vec::new();
-        for cat in &cats {
-            let in_cat: Vec<_> = acts
-                .iter()
-                .filter(|a| a.category.as_ref() == Some(&cat.id))
-                .map(|a| (a.def.id.clone(), a.def.name.clone(), a.def.icon.clone()))
-                .collect();
-            if !in_cat.is_empty() {
-                groups.push((
-                    cat.id.clone(),
-                    cat.name.clone(),
-                    cat.icon.clone(),
-                    cat.color.clone(),
-                    in_cat,
-                ));
-            }
-        }
-        groups
-    });
-
-    // Free-floating activities (registered outside any category) — rendered as
-    // top-level icons that select directly, with no category expansion.
-    let ctx_for_float = ctx.clone();
-    let floating = Memo::new(move |_| {
-        let d = data.get();
-        ctx_for_float
-            .activities_for_pane(&d)
-            .into_iter()
-            .filter(|a| a.category.is_none())
-            .map(|a| (a.def.id.clone(), a.def.name.clone(), a.def.icon.clone()))
-            .collect::<Vec<(ActivityId, String, ActivityIcon)>>()
+        ctx_for_items
+            .items
+            .with_value(|items| filter_nodes(items, &d))
     });
 
     let ctx_for_active = ctx.clone();
@@ -317,29 +315,30 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
             })
     });
 
-    // Auto-expand category of active activity
+    // Reveal the active activity by opening its whole ancestor chain — opening
+    // only the nearest category would leave it hidden inside collapsed
+    // grandparents.
     let ctx_for_expand = ctx.clone();
     Effect::new(move |_| {
-        let active = active_activity.get();
-        if let Some(act_id) = active {
-            if let Some(cat_id) = ctx_for_expand.activity_category(&act_id) {
-                set_expanded_cat.set(Some(cat_id));
+        if let Some(act_id) = active_activity.get() {
+            let ancestors = ctx_for_expand.activity_ancestors(&act_id);
+            if !ancestors.is_empty() {
+                expanded.update(|open| open.extend(ancestors));
             }
         }
     });
 
-    let icon_active_opacity = style.icon_active_opacity.clone();
-    let icon_active_opacity_float = icon_active_opacity.clone();
-    // Floating activities have no category to colour their active highlight, so the
-    // selected one highlights in the theme accent (matching the categorised behaviour).
-    let float_accent = ctx.theme.accent.clone();
+    let renderer = BarRender {
+        ctx: ctx.clone(),
+        pane_id: pane_id.clone(),
+        expanded,
+        active_opacity: style.icon_active_opacity.clone(),
+    };
 
     let ctx_actions = ctx.clone();
-    let ctx_float = ctx.clone();
-    let pid_float = pane_id.clone();
 
     // Host-provided per-pane chrome (e.g. session indicator). Cloned out before
-    // `ctx` is moved into the activity-groups closure below.
+    // `ctx` is moved into the item closure below.
     let pane_accessory = ctx.pane_accessory.clone();
     let pid_accessory = pane_id.clone();
 
@@ -370,7 +369,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     view! {
         <div class=scope_class>
             <div class=ActivityBarStyle::PANEL>
-                // App icon + categories + activities
+                // App icon + the registered item tree
                 <div>
                     {app_icon.map(|icon| {
                         let ctx_drag = ctx.clone();
@@ -397,227 +396,9 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                             </div>
                         }
                     })}
-                    // Free-floating activities: top-level icons, select directly.
-                    {
-                        move || {
-                            let current_active = active_activity.get();
-                            floating.get().into_iter().map(|(act_id, name, icon)| {
-                                let is_active = current_active.as_ref() == Some(&act_id);
-                                let active_style = if is_active {
-                                    ActivityBarStyle::vars(|v| {
-                                        v.icon_opacity(&icon_active_opacity_float)
-                                            .icon_color(&float_accent)
-                                            .icon_stroke_color(&float_accent)
-                                    })
-                                } else {
-                                    String::new()
-                                };
-                                let ctx = ctx_float.clone();
-                                let pid = pid_float.clone();
-                                let label = name.clone();
-                                // A `div role=button`, not a `<button>`: form
-                                // controls consume mousedown for activation, so
-                                // browsers won't reliably start an HTML5 drag
-                                // from one (Firefox ignores `draggable` on them
-                                // outright). The app icon above is a div for the
-                                // same reason. Keyboard activation is restored
-                                // with tabindex + Enter/Space below.
-                                let ctx_ds = ctx_float.clone();
-                                let ctx_de = ctx_float.clone();
-                                let ctx_key = ctx_float.clone();
-                                let act_drag = act_id.clone();
-                                let act_key = act_id.clone();
-                                let pid_key = pid_float.clone();
-                                let can_drag = ctx_float.new_pane.is_some();
-                                view! {
-                                    <div class=ActivityBarStyle::BTN
-                                            role="button"
-                                            tabindex="0"
-                                            style=active_style
-                                            draggable=can_drag.then_some("true")
-                                            on:dragstart=move |ev| {
-                                                if !can_drag { return }
-                                                if let Some(dt) = ev.data_transfer() {
-                                                    let _ = dt.set_data("text/plain", &act_drag.0);
-                                                    dt.set_effect_allowed("copy");
-                                                }
-                                                // Deferred out of the dragstart handler on purpose.
-                                                // Setting this mounts every pane's DropOverlay, and
-                                                // an element appearing under the pointer while the
-                                                // drag session is still being established makes
-                                                // Chrome abandon the drag: dragstart fires, then
-                                                // dragend with dropEffect=none and no dragover
-                                                // anywhere, not even a document-level capture
-                                                // listener. Dragging by the icon escaped it only
-                                                // because the cursor sits left of the content area
-                                                // where nothing is inserted.
-                                                let ctx_deferred = ctx_ds.clone();
-                                                let payload = DragPayload::NewActivity(act_drag.clone());
-                                                request_animation_frame(move || {
-                                                    ctx_deferred.drag.set(Some(payload));
-                                                });
-                                            }
-                                            on:dragend=move |ev: web_sys::DragEvent| {
-                                                let eff = ev.data_transfer()
-                                                    .map(|dt| dt.drop_effect())
-                                                    .unwrap_or_default();
-                                                web_sys::console::log_1(
-                                                    &format!("[ml-dbg] dragend     dropEffect={eff}").into(),
-                                                );
-                                                ctx_de.drag.set(None);
-                                            }
-                                            on:keydown=move |ev: web_sys::KeyboardEvent| {
-                                                if ev.key() == "Enter" || ev.key() == " " {
-                                                    ev.prevent_default();
-                                                    ctx_key.set_active_activity(&pid_key, Some(act_key.clone()));
-                                                }
-                                            }
-                                            on:click=move |_| {
-                                        ctx.set_active_activity(&pid, Some(act_id.clone()));
-                                    }>
-                                        // Neither span is a drag source: the row
-                                        // above owns the drag. Chrome resolves
-                                        // the source by walking up from the
-                                        // mousedown target, and the row is the
-                                        // only ancestor that is always rendered
-                                        // (the label is hover-gated).
-                                        <span class=ActivityBarStyle::ICON_SLOT>
-                                            {render_icon(&icon)}
-                                        </span>
-                                        <span class=ActivityBarStyle::LABEL>
-                                            {label.clone()}
-                                        </span>
-                                    </div>
-                                }
-                            }).collect::<Vec<_>>()
-                        }
-                    }
-                    {
-                        let pane_id = pane_id.clone();
-                        move || {
-                        let pane_id = pane_id.clone();
-                        let groups = grouped.get();
-                        let current_active = active_activity.get();
-                        let current_expanded = expanded_cat.get();
-
-                        groups.into_iter().map(|(cat_id, cat_name, cat_icon, cat_color, acts)| {
-                            let is_expanded = current_expanded.as_ref() == Some(&cat_id);
-                            let has_active = acts.iter().any(|(id, _, _)| current_active.as_ref() == Some(id));
-                            let cat_active = is_expanded || has_active;
-                            let cat_style = if cat_active {
-                                ActivityBarStyle::vars(|v| v.icon_opacity(&icon_active_opacity))
-                            } else {
-                                String::new()
-                            };
-                            let show_dot = !is_expanded && has_active;
-                            let dot_color = cat_color.clone();
-                            let cat_color_for_border = cat_color.clone();
-
-                            let cat_id_click = cat_id.clone();
-                            view! {
-                                <div>
-                                    <button class=ActivityBarStyle::BTN
-                                            style=cat_style
-                                            on:click=move |_| {
-                                        if is_expanded { set_expanded_cat.set(None); }
-                                        else { set_expanded_cat.set(Some(cat_id_click.clone())); }
-                                    }>
-                                        <span class=ActivityBarStyle::ICON_SLOT>
-                                            {if show_dot {
-                                                Some(view! {
-                                                    <span class=ActivityBarStyle::DOT style=ActivityBarInternal::vars(|v| v.category_color(&dot_color))></span>
-                                                })
-                                            } else { None }}
-                                            {render_icon(&cat_icon)}
-                                        </span>
-                                        <span class=ActivityBarStyle::LABEL>{cat_name.clone()}</span>
-                                    </button>
-                                    {if is_expanded {
-                                        Some(view! {
-                                            <div style="position:relative">
-                                                <div class=ActivityBarStyle::CAT_BORDER style=ActivityBarInternal::vars(|v| v.category_color(&cat_color_for_border))></div>
-                                                {acts.into_iter().map(|(act_id, name, icon)| {
-                                                    let is_active = current_active.as_ref() == Some(&act_id);
-                                                    let active_style = if is_active {
-                                                        ActivityBarStyle::vars(|v| {
-                                                            v.icon_opacity(&icon_active_opacity)
-                                                             .icon_color(&cat_color_for_border)
-                                                             .icon_stroke_color(&cat_color_for_border)
-                                                        })
-                                                    } else {
-                                                        String::new()
-                                                    };
-                                                    // `div role=button` rather than
-                                                    // `<button>` so an HTML5 drag can
-                                                    // actually start — see the floating
-                                                    // branch above for why.
-                                                    let ctx_ds = ctx.clone();
-                                                    let ctx_de = ctx.clone();
-                                                    let ctx_key = ctx.clone();
-                                                    let act_drag = act_id.clone();
-                                                    let act_key = act_id.clone();
-                                                    let pid_key = pane_id.clone();
-                                                    let can_drag = ctx.new_pane.is_some();
-                                                    let ctx = ctx.clone();
-                                                    let pid = pane_id.clone();
-                                                    let label = name.clone();
-                                                    view! {
-                                                        <div class=ActivityBarStyle::BTN
-                                                                role="button"
-                                                                tabindex="0"
-                                                                style=active_style
-                                                                draggable=can_drag.then_some("true")
-                                                                on:dragstart=move |ev| {
-                                                                    if !can_drag { return }
-                                                                    if let Some(dt) = ev.data_transfer() {
-                                                                        let _ = dt.set_data("text/plain", &act_drag.0);
-                                                                        dt.set_effect_allowed("copy");
-                                                                    }
-                                                                    // Deferred — see the floating branch for why
-                                                                    // mounting the overlays inside dragstart kills
-                                                                    // the drag.
-                                                                    let ctx_deferred = ctx_ds.clone();
-                                                                    let payload = DragPayload::NewActivity(act_drag.clone());
-                                                                    request_animation_frame(move || {
-                                                                        ctx_deferred.drag.set(Some(payload));
-                                                                    });
-                                                                }
-                                                                on:dragend=move |ev: web_sys::DragEvent| {
-                                                                    let eff = ev.data_transfer()
-                                                                        .map(|dt| dt.drop_effect())
-                                                                        .unwrap_or_default();
-                                                                    web_sys::console::log_1(
-                                                                        &format!("[ml-dbg] dragend     dropEffect={eff}").into(),
-                                                                    );
-                                                                    ctx_de.drag.set(None);
-                                                                }
-                                                                on:keydown=move |ev: web_sys::KeyboardEvent| {
-                                                                    if ev.key() == "Enter" || ev.key() == " " {
-                                                                        ev.prevent_default();
-                                                                        ctx_key.set_active_activity(&pid_key, Some(act_key.clone()));
-                                                                    }
-                                                                }
-                                                                on:click=move |_| {
-                                                            ctx.set_active_activity(&pid, Some(act_id.clone()));
-                                                        }>
-                                                            // Not drag sources — the
-                                                            // row owns the drag; see
-                                                            // the floating branch.
-                                                            <span class=ActivityBarStyle::ICON_SLOT>
-                                                                {render_icon(&icon)}
-                                                            </span>
-                                                            <span class=ActivityBarStyle::LABEL>
-                                                                {label.clone()}
-                                                            </span>
-                                                        </div>
-                                                    }
-                                                }).collect::<Vec<_>>()}
-                                            </div>
-                                        })
-                                    } else { None }}
-                                </div>
-                            }
-                        }).collect::<Vec<_>>()
+                    {move || {
+                        let active = active_activity.get();
+                        renderer.nodes(&bar_items.get(), 0, None, active.as_ref())
                     }}
                 </div>
                 // Pane actions (bottom)
@@ -661,6 +442,325 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     }
 }
 
+/// A pane-filtered projection of the registered item tree.
+///
+/// Projected rather than rendered straight from [`ActivityNode`] so it can be
+/// `PartialEq` and therefore live in a `Memo`: `ActivityDef` holds `fn` pointers
+/// and isn't comparable, and without memo dedup the bar would rebuild on every
+/// unrelated tree change — churning the DOM, and mid-drag destroying the drag
+/// source.
+#[derive(Clone, PartialEq)]
+enum BarNode {
+    Activity {
+        id: ActivityId,
+        name: String,
+        icon: ActivityIcon,
+    },
+    Category {
+        id: CategoryId,
+        name: String,
+        icon: ActivityIcon,
+        color: String,
+        children: Vec<BarNode>,
+    },
+}
+
+impl BarNode {
+    /// Whether `active` is this node or anywhere beneath it. Drives the collapsed
+    /// category's dot indicator, which has to survive nesting: an active
+    /// grandchild must still mark its top-level ancestor.
+    fn contains_active(&self, active: Option<&ActivityId>) -> bool {
+        match self {
+            BarNode::Activity { id, .. } => active == Some(id),
+            BarNode::Category { children, .. } => {
+                children.iter().any(|c| c.contains_active(active))
+            }
+        }
+    }
+}
+
+/// Project the registered tree down to what one pane shows.
+///
+/// An activity survives if its `filter` passes; a category survives only if some
+/// descendant activity does, so a category whose entire contents are filtered out
+/// disappears instead of expanding to nothing.
+fn filter_nodes<D: PaneData>(items: &[ActivityNode<D>], data: &D) -> Vec<BarNode> {
+    items
+        .iter()
+        .filter_map(|node| match node {
+            ActivityNode::Activity(def) => (def.filter)(data).then(|| BarNode::Activity {
+                id: def.id.clone(),
+                name: def.name.clone(),
+                icon: def.icon.clone(),
+            }),
+            ActivityNode::Category(cat) => {
+                let children = filter_nodes(&cat.children, data);
+                (!children.is_empty()).then(|| BarNode::Category {
+                    id: cat.id.clone(),
+                    name: cat.name.clone(),
+                    icon: cat.icon.clone(),
+                    color: cat.color.clone(),
+                    children,
+                })
+            }
+        })
+        .collect()
+}
+
+/// Renders the item tree for one pane's bar.
+///
+/// A struct rather than a pile of arguments threaded through the recursion, and
+/// it keeps the activity row in exactly one place — the previous flat/categorised
+/// split meant every fix to a row had to be made twice.
+struct BarRender<D: PaneData> {
+    ctx: MullionContext<D>,
+    pane_id: PaneId,
+    expanded: RwSignal<HashSet<CategoryId>>,
+    active_opacity: String,
+}
+
+impl<D: PaneData + Send + Sync> BarRender<D> {
+    /// Render a sibling list. `inherited` is the nearest enclosing category's
+    /// colour, which activities use for their active state; `None` at the top
+    /// level, where there is no category to borrow from.
+    fn nodes(
+        &self,
+        nodes: &[BarNode],
+        depth: usize,
+        inherited: Option<&str>,
+        active: Option<&ActivityId>,
+    ) -> Vec<AnyView> {
+        nodes
+            .iter()
+            .map(|node| match node {
+                BarNode::Activity { id, name, icon } => {
+                    self.activity(id, name, icon, inherited, active)
+                }
+                BarNode::Category { .. } => self.category(node, depth, active),
+            })
+            .collect()
+    }
+
+    /// One activity row: selects on click, and is a drag source when the host
+    /// installed a `new_pane` hook.
+    fn activity(
+        &self,
+        id: &ActivityId,
+        name: &str,
+        icon: &ActivityIcon,
+        inherited: Option<&str>,
+        active: Option<&ActivityId>,
+    ) -> AnyView {
+        let is_active = active == Some(id);
+        // A categorised activity highlights in its category's colour; a
+        // top-level one has no category, so it falls back to the themeable
+        // foreground (never `theme.accent`, which is a background).
+        let active_color = inherited.unwrap_or(FLOAT_ACTIVE_COLOR);
+        let active_style = if is_active {
+            ActivityBarStyle::vars(|v| {
+                v.icon_opacity(&self.active_opacity)
+                    .icon_color(active_color)
+                    .icon_stroke_color(active_color)
+            })
+        } else {
+            String::new()
+        };
+
+        let can_drag = self.ctx.new_pane.is_some();
+        let (ctx_click, ctx_ds, ctx_de, ctx_key) = (
+            self.ctx.clone(),
+            self.ctx.clone(),
+            self.ctx.clone(),
+            self.ctx.clone(),
+        );
+        let (pid_click, pid_key) = (self.pane_id.clone(), self.pane_id.clone());
+        let (act_click, act_drag, act_key) = (id.clone(), id.clone(), id.clone());
+        let label = name.to_string();
+        let icon_view = render_icon(icon);
+
+        // A `div role=button`, not a `<button>`: form controls consume mousedown
+        // for activation, so browsers won't reliably start an HTML5 drag from one
+        // (Firefox ignores `draggable` on them outright). Keyboard activation is
+        // restored with tabindex + Enter/Space.
+        view! {
+            <div class=ActivityBarStyle::BTN
+                 role="button"
+                 tabindex="0"
+                 style=active_style
+                 draggable=can_drag.then_some("true")
+                 on:dragstart=move |ev| {
+                     if !can_drag { return }
+                     if let Some(dt) = ev.data_transfer() {
+                         let _ = dt.set_data("text/plain", &act_drag.0);
+                         dt.set_effect_allowed("copy");
+                     }
+                     // Deferred out of the dragstart handler on purpose. Setting
+                     // this mounts every pane's DropOverlay, and an element
+                     // appearing under the pointer while the drag session is
+                     // still being established makes Chrome abandon the drag:
+                     // dragstart fires, then dragend with dropEffect=none and no
+                     // dragover anywhere, not even a document-level capture
+                     // listener. Dragging by the icon escaped it only because the
+                     // cursor sits left of the content area, where nothing is
+                     // inserted.
+                     let ctx_deferred = ctx_ds.clone();
+                     let payload = DragPayload::NewActivity(act_drag.clone());
+                     request_animation_frame(move || {
+                         ctx_deferred.drag.set(Some(payload));
+                     });
+                 }
+                 on:dragend=move |_| ctx_de.drag.set(None)
+                 on:keydown=move |ev: web_sys::KeyboardEvent| {
+                     if ev.key() == "Enter" || ev.key() == " " {
+                         ev.prevent_default();
+                         ctx_key.set_active_activity(&pid_key, Some(act_key.clone()));
+                     }
+                 }
+                 on:click=move |_| {
+                     ctx_click.set_active_activity(&pid_click, Some(act_click.clone()));
+                 }>
+                <span class=ActivityBarStyle::ICON_SLOT>{icon_view}</span>
+                <span class=ActivityBarStyle::LABEL>{label}</span>
+            </div>
+        }
+        .into_any()
+    }
+
+    /// One category row plus, when open, its children indented one level.
+    fn category(&self, node: &BarNode, depth: usize, active: Option<&ActivityId>) -> AnyView {
+        let BarNode::Category {
+            id,
+            name,
+            icon,
+            color,
+            children,
+        } = node
+        else {
+            return ().into_any();
+        };
+
+        let expanded = self.expanded;
+        let is_open = expanded.get().contains(id);
+        let has_active = node.contains_active(active);
+        let cat_style = if is_open || has_active {
+            ActivityBarStyle::vars(|v| v.icon_opacity(&self.active_opacity))
+        } else {
+            String::new()
+        };
+        // Collapsed but holding the active activity — mark it, since the
+        // highlighted row itself is hidden.
+        let show_dot = !is_open && has_active;
+
+        let id_toggle = id.clone();
+        let label = name.to_string();
+        let icon_view = render_icon(icon);
+        let dot_color = color.clone();
+        let border_color = color.clone();
+        // One glyph, rotated — never two different glyphs. `▸` and `▾` have
+        // different advance widths, so swapping them moved the chevron (and
+        // everything else in the row) as a category opened. A transform has no
+        // layout effect, and the fixed-width, centred box below keeps the slot
+        // identical in both states.
+        let chevron_rotation = if is_open {
+            "transform:rotate(90deg);"
+        } else {
+            ""
+        };
+
+        let children_view = if is_open {
+            let rendered = self.nodes(children, depth + 1, Some(color), active);
+            Some(view! {
+                <div style="position:relative">
+                    // Styled inline: this is the seventh class in the component
+                    // and css-styled only resolves six, so a `CAT_BORDER` rule in
+                    // the macro block never matches. Absolute, so it cannot add
+                    // layout of its own.
+                    <div style=format!(
+                        "position:absolute;left:0;top:0;bottom:0;width:var(--ab-cat-border-width);background:{}",
+                        border_color)></div>
+                    {rendered}
+                </div>
+            })
+        } else {
+            None
+        };
+
+        // Only an *open* category gets the card. Closed, it is a plain row, so a
+        // collapsed bar stays quiet; open, the card encloses the header and the
+        // children together and its translucent fill composites with any parent
+        // card, which is what makes nesting depth legible.
+        //
+        // Inline rather than a class: adding entries to this component's
+        // `class(..)` list makes css-styled silently mis-resolve the *existing*
+        // ones (BTN and friends came out as `.mullion-ab-panel0`, so every button
+        // lost its base styling and fell back to browser chrome). The values are
+        // still themeable through the two custom properties.
+        // Geometry is identical open or closed — only colours change. A border
+        // that appears on open would push every row below it down 1px, and a
+        // negative margin that appears on open would shift this row's content
+        // right, so both are always present and merely transparent when closed.
+        //
+        // The bleed pulls the card through the panel's right-hand padding so it
+        // meets the sidebar edge rather than stopping short. Top level only:
+        // a nested card's parent has already bled, so it spans to the edge for
+        // free, and repeating it per level would push each one further out. No
+        // radius anywhere — rounded corners read as a gap from the edge.
+        let fill = if is_open {
+            "var(--ab-cat-card-bg)"
+        } else {
+            "transparent"
+        };
+        let edge = if is_open {
+            "var(--ab-cat-edge)"
+        } else {
+            "transparent"
+        };
+        let bleed = if depth == 0 {
+            "margin-right:calc(-1 * var(--ab-expanded-padding));"
+        } else {
+            ""
+        };
+        let wrapper_style = format!("background:{fill};border-top:1px solid {edge};{bleed}");
+
+        view! {
+            <div style=wrapper_style>
+                <button class=ActivityBarStyle::BTN
+                        style=format!("{cat_style};font-weight:600")
+                        on:click=move |_| {
+                            expanded.update(|open| {
+                                if !open.remove(&id_toggle) {
+                                    open.insert(id_toggle.clone());
+                                }
+                            });
+                        }>
+                    <span class=ActivityBarStyle::ICON_SLOT>
+                        {show_dot.then(|| view! {
+                            <span class=ActivityBarStyle::DOT
+                                  style=ActivityBarInternal::vars(|v| v.category_color(&dot_color))></span>
+                        })}
+                        {icon_view}
+                    </span>
+                    <span class=ActivityBarStyle::LABEL
+                          style="color:var(--ab-cat-label-color)">{label}</span>
+                    // Reuses LABEL so it appears and hides exactly with the
+                    // label, which is also the only time there is room for it.
+                    // Fixed width + centred so the glyph's own metrics can never
+                    // move the row; open/closed differ only by the rotation.
+                    <span class=ActivityBarStyle::LABEL
+                          style=format!(
+                              "margin-left:auto;width:14px;flex-shrink:0;\
+                               font-size:9px;line-height:1;text-align:center;\
+                               opacity:0.5;{chevron_rotation}")>
+                        "\u{25b8}"
+                    </span>
+                </button>
+                {children_view}
+            </div>
+        }
+        .into_any()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -680,6 +780,143 @@ mod tests {
         assert!(
             !css.contains(".mullion-ab:hover"),
             "unguarded .mullion-ab:hover rule present in base CSS: {css}"
+        );
+    }
+
+
+    #[test]
+    fn category_card_colour_is_translucent() {
+        // Load-bearing, not cosmetic: nested categories render nested cards, and
+        // depth is legible only because the fills composite. A solid default
+        // would flatten every level to one tone.
+        let css = ActivityBarStyle::default().to_css();
+        let has_alpha = css.contains("rgba(") || css.contains("hsla(") || css.contains("/ 0.");
+        assert!(
+            has_alpha,
+            "category card background must be translucent so nesting stacks: {css}"
+        );
+    }
+
+    #[test]
+    fn every_class_identifier_resolves() {
+        // css-styled resolves only the first SIX class identifiers used in a
+        // `css!` block; a seventh is silently emitted as `<scope>-panel0`, so its
+        // rule matches nothing. That is how BTN lost its base styling — buttons
+        // fell back to browser chrome (white background, wrong font, wrapping
+        // labels) — and `cat_border`'s rule had never applied at all.
+        //
+        // Guard the invariant rather than the symptom: no generated fallback
+        // selector may appear.
+        let css = ActivityBarStyle::default().to_css();
+        assert!(
+            !css.contains("-panel0"),
+            "a class identifier failed to resolve (over the six-per-block limit): {css}"
+        );
+        // And the classes the render actually attaches must be present.
+        for expected in [
+            ".mullion-ab-btn",
+            ".mullion-ab-label",
+            ".mullion-ab-icon-slot",
+            ".mullion-ab-dot",
+            ".mullion-ab-icon",
+            ".mullion-ab-panel {",
+        ] {
+            assert!(css.contains(expected), "missing {expected} in base CSS: {css}");
+        }
+    }
+
+    #[test]
+    fn filter_drops_categories_left_empty() {
+        use crate::activity::{ActivityDef, Category};
+        use serde::{Deserialize, Serialize};
+
+        #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+        struct D {
+            show: bool,
+        }
+
+        fn gated(id: &str) -> ActivityDef<D> {
+            ActivityDef::new(
+                ActivityId::new(id),
+                id,
+                ActivityIcon::Class(String::new()),
+                |d: &D| d.show,
+                |_, _| ().into_any(),
+            )
+        }
+
+        let items = vec![ActivityNode::Category(Category {
+            id: CategoryId::new("outer"),
+            name: "Outer".into(),
+            icon: ActivityIcon::Class(String::new()),
+            color: "#fff".into(),
+            children: vec![ActivityNode::Category(Category {
+                id: CategoryId::new("inner"),
+                name: "Inner".into(),
+                icon: ActivityIcon::Class(String::new()),
+                color: "#000".into(),
+                children: vec![ActivityNode::activity(gated("hidden"))],
+            })],
+        })];
+
+        // The only activity passes: both wrappers survive.
+        assert_eq!(filter_nodes(&items, &D { show: true }).len(), 1);
+
+        // It is filtered out: the empty inner category must not survive, and
+        // neither must the outer one — otherwise the bar shows a category that
+        // expands to nothing.
+        assert!(
+            filter_nodes(&items, &D { show: false }).is_empty(),
+            "categories whose whole subtree is filtered out must disappear"
+        );
+    }
+
+    #[test]
+    fn contains_active_sees_through_nesting() {
+        let leaf = BarNode::Activity {
+            id: ActivityId::new("deep"),
+            name: "Deep".into(),
+            icon: ActivityIcon::Class(String::new()),
+        };
+        let nested = BarNode::Category {
+            id: CategoryId::new("outer"),
+            name: "Outer".into(),
+            icon: ActivityIcon::Class(String::new()),
+            color: "#fff".into(),
+            children: vec![BarNode::Category {
+                id: CategoryId::new("inner"),
+                name: "Inner".into(),
+                icon: ActivityIcon::Class(String::new()),
+                color: "#000".into(),
+                children: vec![leaf],
+            }],
+        };
+        // A collapsed top-level category must still show its dot when the active
+        // activity is a grandchild.
+        assert!(nested.contains_active(Some(&ActivityId::new("deep"))));
+        assert!(!nested.contains_active(Some(&ActivityId::new("elsewhere"))));
+        assert!(!nested.contains_active(None));
+    }
+
+    #[test]
+    fn floating_active_colour_is_a_foreground() {
+        // Regression: this was `theme.accent`, a background colour by contract
+        // (default #222222, used elsewhere as `--ws-btn-bg`), which made the
+        // active floating activity's icon invisible against the bar.
+        assert!(
+            !FLOAT_ACTIVE_COLOR.contains("--ml-accent"),
+            "floating active colour must not use the accent (a background): {FLOAT_ACTIVE_COLOR}"
+        );
+        assert!(
+            FLOAT_ACTIVE_COLOR.contains("--ml-text"),
+            "expected a text-colour fallback, got: {FLOAT_ACTIVE_COLOR}"
+        );
+        // Host override hook, and it must not reference the property it is
+        // assigned to (`--ab-icon-color`), which would be a cyclic reference.
+        assert!(FLOAT_ACTIVE_COLOR.contains("--ab-float-active-color"));
+        assert!(
+            !FLOAT_ACTIVE_COLOR.contains("--ab-icon-color"),
+            "cyclic custom-property reference: {FLOAT_ACTIVE_COLOR}"
         );
     }
 

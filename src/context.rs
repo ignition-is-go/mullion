@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 
-use crate::activity::{ActivityDef, ActivityIcon, ActivityWithCategory, Category, CategoryMeta};
+use crate::activity::{ActivityIcon, ActivityNode, ActivityWithCategory, CategoryMeta};
 use crate::components::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
 use crate::components::drop_overlay::DropOverlayStyle;
 use crate::components::mullion_root::MullionStyle;
@@ -99,9 +99,11 @@ pub struct MullionContext<D: PaneData> {
     /// signal created lazily during a structural re-render would be
     /// disposed along with that transient scope.
     pub(crate) ratios: StoredValue<HashMap<PaneId, ArcRwSignal<f64>>>,
-    /// All registered activities (flattened, with category ids).
+    /// The registered item tree, in render order. The activity bar walks this;
+    /// `activities` and `categories` are flattened views of it for lookup.
+    pub(crate) items: StoredValue<Vec<ActivityNode<D>>>,
     pub(crate) activities: StoredValue<Vec<ActivityWithCategory<D>>>,
-    /// Category metadata (without activities), sorted by order.
+    /// Category metadata (without children), in registration (pre-order) order.
     pub(crate) categories: StoredValue<Vec<CategoryMeta>>,
     /// Event sink — write end. Every mutation pushes an event here.
     event_tx: StoredValue<Box<dyn Fn(PaneEvent<D>) + Send + Sync>>,
@@ -153,8 +155,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         initial_tree: PaneNode<D>,
-        categories: Vec<Category<D>>,
-        floating_activities: Vec<ActivityDef<D>>,
+        items: Vec<ActivityNode<D>>,
         event_handler: impl Fn(PaneEvent<D>) + Send + Sync + 'static,
         theme: MullionTheme,
         mullion_style: MullionStyle,
@@ -172,34 +173,12 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         auto_hide_activity_bar: Option<PaneAutoHideActivityBar<D>>,
         new_pane: Option<PaneFactory<D>>,
     ) -> Self {
-        // Flatten categories into metadata + activities with category ids. Floating
-        // activities (registered outside any category) carry `category: None`.
+        // Flatten the item tree for lookup, keeping the tree itself for render.
+        // Both come out in pre-order, so "sorted" is just registration order —
+        // there is no `order` field to sort by any more.
         let mut cat_metas = Vec::new();
         let mut all_activities = Vec::new();
-
-        for cat in categories {
-            cat_metas.push(CategoryMeta {
-                id: cat.id,
-                name: cat.name,
-                order: cat.order,
-                icon: cat.icon,
-                color: cat.color,
-            });
-            for act in cat.activities {
-                all_activities.push(ActivityWithCategory {
-                    def: act,
-                    category: Some(cat_metas.last().unwrap().id.clone()),
-                });
-            }
-        }
-        for act in floating_activities {
-            all_activities.push(ActivityWithCategory {
-                def: act,
-                category: None,
-            });
-        }
-
-        cat_metas.sort_by_key(|c| c.order);
+        flatten_items(&items, &mut Vec::new(), &mut cat_metas, &mut all_activities);
 
         // Seed the ratio signal map from the initial tree's splits.
         let mut initial_ratios = Vec::new();
@@ -212,6 +191,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         MullionContext {
             tree: RwSignal::new(initial_tree),
             ratios: StoredValue::new(ratio_map),
+            items: StoredValue::new(items),
             activities: StoredValue::new(all_activities),
             categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
@@ -508,6 +488,30 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         })
     }
 
+    /// An activity's ancestor categories, outermost first. Empty for a
+    /// top-level activity, or an unknown id.
+    ///
+    /// The activity bar expands the whole chain when an activity becomes active,
+    /// so a nested activity reveals itself rather than staying hidden inside
+    /// collapsed ancestors.
+    pub fn activity_ancestors(&self, activity_id: &ActivityId) -> Vec<CategoryId> {
+        self.activities.with_value(|acts| {
+            acts.iter()
+                .find(|a| a.def.id == *activity_id)
+                .map(|a| a.path.clone())
+                .unwrap_or_default()
+        })
+    }
+
+    /// A category's colour, or `None` for an unknown id.
+    pub fn category_color(&self, category_id: &CategoryId) -> Option<String> {
+        self.categories.with_value(|cats| {
+            cats.iter()
+                .find(|c| c.id == *category_id)
+                .map(|c| c.color.clone())
+        })
+    }
+
     /// Update a single pane's data without replacing the whole tree.
     pub fn update_pane_data(&self, pane: &PaneId, new_data: D) {
         self.tree.update(|tree| {
@@ -564,5 +568,154 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             .unwrap()
             .get(&id)
             .map(|el| el.get_bounding_client_rect())
+    }
+}
+
+/// Walk the registered item tree, collecting a flat list of categories and of
+/// activities-with-their-ancestor-path.
+///
+/// `path` is the stack of enclosing category ids, outermost first; it is pushed
+/// and popped as the walk descends and returns, so each activity records exactly
+/// the categories above it. Pre-order, so both output lists come out in render
+/// order and no sorting is needed — position in the tree is the order.
+fn flatten_items<D: PaneData>(
+    items: &[ActivityNode<D>],
+    path: &mut Vec<CategoryId>,
+    cats: &mut Vec<CategoryMeta>,
+    acts: &mut Vec<ActivityWithCategory<D>>,
+) {
+    for item in items {
+        match item {
+            ActivityNode::Activity(def) => acts.push(ActivityWithCategory {
+                def: def.clone(),
+                category: path.last().cloned(),
+                path: path.clone(),
+            }),
+            ActivityNode::Category(cat) => {
+                cats.push(CategoryMeta {
+                    id: cat.id.clone(),
+                    name: cat.name.clone(),
+                    icon: cat.icon.clone(),
+                    color: cat.color.clone(),
+                });
+                path.push(cat.id.clone());
+                flatten_items(&cat.children, path, cats, acts);
+                path.pop();
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::activity::{ActivityDef, Category};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+    struct D {
+        show_extra: bool,
+    }
+
+    fn act(id: &str) -> ActivityDef<D> {
+        ActivityDef::new(
+            ActivityId::new(id),
+            id,
+            ActivityIcon::Class(String::new()),
+            |_| true,
+            |_, _| ().into_any(),
+        )
+    }
+
+    fn cat(id: &str, children: Vec<ActivityNode<D>>) -> ActivityNode<D> {
+        ActivityNode::Category(Category {
+            id: CategoryId::new(id),
+            name: id.into(),
+            icon: ActivityIcon::Class(String::new()),
+            color: format!("#{id}"),
+            children,
+        })
+    }
+
+    /// Explorer[ files, Deep[ nested ] ], settings
+    fn sample() -> Vec<ActivityNode<D>> {
+        vec![
+            cat(
+                "explorer",
+                vec![
+                    ActivityNode::activity(act("files")),
+                    cat("deep", vec![ActivityNode::activity(act("nested"))]),
+                ],
+            ),
+            ActivityNode::activity(act("settings")),
+        ]
+    }
+
+    fn flatten(items: &[ActivityNode<D>]) -> (Vec<CategoryMeta>, Vec<ActivityWithCategory<D>>) {
+        let (mut cats, mut acts) = (Vec::new(), Vec::new());
+        flatten_items(items, &mut Vec::new(), &mut cats, &mut acts);
+        (cats, acts)
+    }
+
+    #[test]
+    fn flatten_records_the_full_ancestor_path() {
+        let (_, acts) = flatten(&sample());
+        let find = |id: &str| {
+            acts.iter()
+                .find(|a| a.def.id == ActivityId::new(id))
+                .expect("activity present")
+        };
+
+        // Top-level activity: no ancestors at all.
+        assert!(find("settings").path.is_empty());
+        assert_eq!(find("settings").category, None);
+
+        // One level down.
+        assert_eq!(find("files").path, vec![CategoryId::new("explorer")]);
+
+        // Two levels down: the whole chain, outermost first, with `category`
+        // being the *nearest* ancestor — the one whose colour it inherits.
+        assert_eq!(
+            find("nested").path,
+            vec![CategoryId::new("explorer"), CategoryId::new("deep")]
+        );
+        assert_eq!(find("nested").category, Some(CategoryId::new("deep")));
+    }
+
+    #[test]
+    fn flatten_preserves_registration_order() {
+        // Position is the order — there is no `order` field to sort by, so a
+        // pre-order walk must come out in the order the host wrote.
+        let (cats, acts) = flatten(&sample());
+        assert_eq!(
+            cats.iter().map(|c| c.id.0.as_str()).collect::<Vec<_>>(),
+            vec!["explorer", "deep"]
+        );
+        assert_eq!(
+            acts.iter().map(|a| a.def.id.0.as_str()).collect::<Vec<_>>(),
+            vec!["files", "nested", "settings"],
+            "settings is registered last and must stay last"
+        );
+    }
+
+    #[test]
+    fn path_stack_does_not_leak_between_siblings() {
+        // Regression guard on the push/pop: a category's ancestors must not
+        // bleed onto its later siblings.
+        let items = vec![
+            cat("first", vec![ActivityNode::activity(act("inside"))]),
+            ActivityNode::activity(act("after")),
+            cat("second", vec![ActivityNode::activity(act("deep-in-second"))]),
+        ];
+        let (_, acts) = flatten(&items);
+        let path = |id: &str| {
+            acts.iter()
+                .find(|a| a.def.id == ActivityId::new(id))
+                .map(|a| a.path.clone())
+                .unwrap()
+        };
+        assert_eq!(path("inside"), vec![CategoryId::new("first")]);
+        assert!(path("after").is_empty(), "sibling after a category is top-level");
+        assert_eq!(path("deep-in-second"), vec![CategoryId::new("second")]);
     }
 }

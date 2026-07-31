@@ -8,7 +8,7 @@ use crate::events::PaneEvent;
 use crate::theme::MullionTheme;
 use crate::tree::{PaneData, PaneNode};
 
-use super::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
+use super::activity_bar::{ActivityBarBehavior, ActivityBarEdge, ActivityBarStyle};
 use super::drop_overlay::DropOverlayStyle;
 use super::pane_header::HeaderStyle;
 use super::pane_view::{PaneStyle, PaneView};
@@ -51,9 +51,9 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// categories, where a category holds another such list. Position is the
     /// order — to put an activity last, put it last.
     items: Vec<ActivityNode<D>>,
-    /// A second activity group, anchored to the bottom of the bar. Same shape as
-    /// `items`; renders in the bottom region instead of the top, which is where
-    /// settings-like entries belong. Default: none.
+    /// A second activity group anchored opposite `items`: at the bottom when
+    /// vertical or at the right when horizontal, which is where settings-like
+    /// entries belong. Default: none.
     #[prop(optional)]
     bottom_items: Vec<ActivityNode<D>>,
     /// Called for every pane event (split, close, move, resize, etc.).
@@ -61,34 +61,39 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// Optional upstream signal to update the tree live from server queries.
     #[prop(optional)]
     upstream: Option<ReadSignal<Option<PaneNode<D>>>>,
-    /// Optional app icon shown at the top of every activity bar.
+    /// Optional app icon shown at the leading edge of every activity bar.
     #[prop(optional)]
     app_icon: Option<crate::activity::ActivityIcon>,
-    /// Optional per-pane chrome rendered in each activity bar's bottom action
-    /// area (e.g. a session-color indicator/switcher). Closes over host state.
+    /// Optional per-pane chrome rendered in each activity bar's secondary
+    /// action area (e.g. a session-color indicator/switcher). Closes over host
+    /// state.
     #[prop(optional)]
     pane_accessory: Option<PaneAccessory>,
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
-    /// Host slot rendered immediately *before* the bottom activity group.
+    /// Host slot rendered immediately *before* the secondary activity group.
     #[prop(optional)]
     bottom_leading: Option<PaneAccessory>,
-    /// Host slot rendered immediately *after* the bottom activity group, above
-    /// `pane_accessory` and the built-in split/close controls.
+    /// Host slot rendered immediately *after* the secondary activity group,
+    /// before `pane_accessory` and the built-in split/close controls.
     #[prop(optional)]
     bottom_trailing: Option<PaneAccessory>,
     /// Whether panes render their header band (the active activity's title).
     /// Default: `true`.
     #[prop(default = true)]
     show_pane_header: bool,
+    /// Edge on which each pane places its activity bar. Left is the default;
+    /// top and bottom arrange items horizontally.
+    #[prop(optional)]
+    activity_bar_edge: ActivityBarEdge,
     /// Optional predicate: panes for which it returns `true` hide their activity
     /// bar (getting hover controls instead). Default: every pane keeps its bar.
     #[prop(optional)]
     hide_activity_bar: Option<crate::context::PaneHideActivityBar<D>>,
     /// Optional predicate: panes for which it returns `true` auto-hide their
-    /// activity bar off the left edge (revealed on edge-hover), while keeping the
-    /// bar. Default: every pane's bar is pinned/visible.
+    /// activity bar off its configured edge, while keeping the bar. Default:
+    /// every pane's bar is pinned/visible.
     #[prop(optional)]
     auto_hide_activity_bar: Option<crate::context::PaneAutoHideActivityBar<D>>,
     /// Optional hook that mints a pane for an activity dragged out of the
@@ -143,7 +148,8 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         new_pane,
         bottom_leading,
         bottom_trailing,
-    );
+    )
+    .with_activity_bar_edge(activity_bar_edge);
 
     if let Some(upstream_sig) = upstream {
         let ctx_clone = ctx.clone();
@@ -171,9 +177,9 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// categories, where a category holds another such list. Position is the
     /// order — to put an activity last, put it last.
     items: Vec<ActivityNode<D>>,
-    /// A second activity group, anchored to the bottom of the bar. Same shape as
-    /// `items`; renders in the bottom region instead of the top, which is where
-    /// settings-like entries belong. Default: none.
+    /// A second activity group anchored opposite `items`: at the bottom when
+    /// vertical or at the right when horizontal, which is where settings-like
+    /// entries belong. Default: none.
     #[prop(optional)]
     bottom_items: Vec<ActivityNode<D>>,
     /// Called for every pane event.
@@ -181,34 +187,39 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// Optional upstream signal.
     #[prop(optional)]
     upstream: Option<ReadSignal<Option<PaneNode<D>>>>,
-    /// Optional app icon shown at the top of every activity bar.
+    /// Optional app icon shown at the leading edge of every activity bar.
     #[prop(optional)]
     app_icon: Option<crate::activity::ActivityIcon>,
-    /// Optional per-pane chrome rendered in each activity bar's bottom action
-    /// area (e.g. a session-color indicator/switcher). Closes over host state.
+    /// Optional per-pane chrome rendered in each activity bar's secondary
+    /// action area (e.g. a session-color indicator/switcher). Closes over host
+    /// state.
     #[prop(optional)]
     pane_accessory: Option<PaneAccessory>,
     /// Optional per-pane bottom-border color (e.g. the pane's session color).
     #[prop(optional)]
     pane_border_color: Option<PaneBorderColor>,
-    /// Host slot rendered immediately *before* the bottom activity group.
+    /// Host slot rendered immediately *before* the secondary activity group.
     #[prop(optional)]
     bottom_leading: Option<PaneAccessory>,
-    /// Host slot rendered immediately *after* the bottom activity group, above
-    /// `pane_accessory` and the built-in split/close controls.
+    /// Host slot rendered immediately *after* the secondary activity group,
+    /// before `pane_accessory` and the built-in split/close controls.
     #[prop(optional)]
     bottom_trailing: Option<PaneAccessory>,
     /// Whether panes render their header band (the active activity's title).
     /// Default: `true`.
     #[prop(default = true)]
     show_pane_header: bool,
+    /// Edge on which each pane places its activity bar. Left is the default;
+    /// top and bottom arrange items horizontally.
+    #[prop(optional)]
+    activity_bar_edge: ActivityBarEdge,
     /// Optional predicate: panes for which it returns `true` hide their activity
     /// bar (getting hover controls instead). Default: every pane keeps its bar.
     #[prop(optional)]
     hide_activity_bar: Option<crate::context::PaneHideActivityBar<D>>,
     /// Optional predicate: panes for which it returns `true` auto-hide their
-    /// activity bar off the left edge (revealed on edge-hover), while keeping the
-    /// bar. Default: every pane's bar is pinned/visible.
+    /// activity bar off its configured edge, while keeping the bar. Default:
+    /// every pane's bar is pinned/visible.
     #[prop(optional)]
     auto_hide_activity_bar: Option<crate::context::PaneAutoHideActivityBar<D>>,
     /// Optional hook that mints a pane for an activity dragged out of the
@@ -262,7 +273,8 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         new_pane,
         bottom_leading,
         bottom_trailing,
-    );
+    )
+    .with_activity_bar_edge(activity_bar_edge);
 
     if let Some(upstream_sig) = upstream {
         let ctx_clone = ctx.clone();

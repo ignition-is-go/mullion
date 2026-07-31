@@ -5,7 +5,7 @@ use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 
 use crate::activity::{ActivityIcon, ActivityNode, ActivityWithCategory, CategoryMeta};
-use crate::components::activity_bar::{ActivityBarBehavior, ActivityBarStyle};
+use crate::components::activity_bar::{ActivityBarBehavior, ActivityBarEdge, ActivityBarStyle};
 use crate::components::drop_overlay::DropOverlayStyle;
 use crate::components::mullion_root::MullionStyle;
 use crate::components::pane_header::HeaderStyle;
@@ -25,7 +25,8 @@ use crate::tree::{
 /// capture state), this is a boxed closure, so the host can close over app-level
 /// signals — e.g. to render a session-color indicator that resolves the pane's
 /// group/session from live server state. Called with the pane's id; returns the
-/// chrome to mount in the activity bar's bottom action area.
+/// chrome to mount in the activity bar's secondary action area (bottom when
+/// vertical, right when horizontal).
 pub type PaneAccessory = Arc<dyn Fn(PaneId) -> AnyView + Send + Sync>;
 
 /// Host-provided per-pane bottom-border color (e.g. the pane's session color).
@@ -45,7 +46,7 @@ pub type PaneHideActivityBar<D> = Arc<dyn Fn(&D) -> bool + Send + Sync>;
 
 /// Host predicate deciding whether a pane *auto-hides* its activity bar, given the
 /// pane's data. A pane matching this keeps its full activity bar (unlike
-/// [`PaneHideActivityBar`]) but tucks it off the pane's left edge; the bar is
+/// [`PaneHideActivityBar`]) but tucks it off its configured edge. The bar is
 /// invisible until the cursor reaches that edge, then slides in over the content
 /// as an overlay — so a pane dedicated to one visual (e.g. a video feed) is
 /// unobstructed until you reach for the bar. `None` = every pane keeps a pinned,
@@ -102,11 +103,10 @@ pub struct MullionContext<D: PaneData> {
     /// The registered item tree, in render order. The activity bar walks this;
     /// `activities` and `categories` are flattened views of it for lookup.
     pub(crate) items: StoredValue<Vec<ActivityNode<D>>>,
-    /// A second item tree, anchored to the bottom of the bar. Same shape and
-    /// same behaviour as `items` — activities, categories, arbitrary nesting —
-    /// it just renders in the bottom region instead of the top. This is where
-    /// settings-like entries go so they sit at the foot of the bar rather than
-    /// trailing the last category.
+    /// A second item tree anchored opposite the primary tree: at the bottom of
+    /// a vertical bar or the right of a horizontal one. Same shape and same
+    /// behaviour as `items` — activities, categories, arbitrary nesting. This
+    /// is where settings-like entries go rather than trailing the main group.
     pub(crate) bottom_items: StoredValue<Vec<ActivityNode<D>>>,
     pub(crate) activities: StoredValue<Vec<ActivityWithCategory<D>>>,
     /// Category metadata (without children), in registration (pre-order) order.
@@ -131,17 +131,19 @@ pub struct MullionContext<D: PaneData> {
     pub header_style: HeaderStyle,
     /// Activity bar interaction options (resolved at provider time).
     pub activity_bar_behavior: ActivityBarBehavior,
-    /// Optional app icon displayed at the top of every activity bar.
+    /// Edge used by each pane's activity bar.
+    pub activity_bar_edge: ActivityBarEdge,
+    /// Optional app icon displayed at the leading edge of every activity bar.
     pub app_icon: Option<ActivityIcon>,
     /// Optional host-provided per-pane chrome rendered in the activity bar's
-    /// bottom action area (e.g. a session-color indicator/switcher).
+    /// secondary action area (e.g. a session-color indicator/switcher).
     pub pane_accessory: Option<PaneAccessory>,
     /// Optional host-provided per-pane bottom-border color (e.g. session color).
     pub pane_border_color: Option<PaneBorderColor>,
-    /// Host slot rendered immediately *before* the bottom activity group.
+    /// Host slot rendered immediately *before* the secondary activity group.
     pub bottom_leading: Option<PaneAccessory>,
-    /// Host slot rendered immediately *after* the bottom activity group, above
-    /// `pane_accessory` and the built-in split/close controls.
+    /// Host slot rendered immediately *after* the secondary activity group,
+    /// before `pane_accessory` and the built-in split/close controls.
     pub bottom_trailing: Option<PaneAccessory>,
     /// Whether each pane renders its header band (the active activity's title).
     /// `false` suppresses it entirely — useful when the host drives navigation
@@ -152,7 +154,8 @@ pub struct MullionContext<D: PaneData> {
     /// its bar.
     pub hide_activity_bar: Option<PaneHideActivityBar<D>>,
     /// Optional host predicate: panes for which it returns `true` auto-hide their
-    /// activity bar (kept, but tucked off the left edge and revealed on edge-hover).
+    /// activity bar (kept, but tucked off its configured edge and revealed on
+    /// edge-hover).
     /// `None` = every pane's bar is pinned/always-visible.
     pub auto_hide_activity_bar: Option<PaneAutoHideActivityBar<D>>,
     /// Optional host hook that mints a pane for an activity dragged out of the
@@ -218,6 +221,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             drop_overlay_style,
             header_style,
             activity_bar_behavior,
+            activity_bar_edge: ActivityBarEdge::default(),
             app_icon,
             pane_accessory,
             pane_border_color,
@@ -229,6 +233,16 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             new_pane,
             pane_elements: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    /// Set the activity bar edge used by every pane in this context.
+    ///
+    /// [`Self::new`] preserves the historic left-edge default. This builder lets
+    /// custom context constructors choose another edge without
+    /// changing that long-standing constructor signature.
+    pub fn with_activity_bar_edge(mut self, edge: ActivityBarEdge) -> Self {
+        self.activity_bar_edge = edge;
+        self
     }
 
     fn emit(&self, event: PaneEvent<D>) {
@@ -779,7 +793,10 @@ mod tests {
         let items = vec![
             cat("first", vec![ActivityNode::activity(act("inside"))]),
             ActivityNode::activity(act("after")),
-            cat("second", vec![ActivityNode::activity(act("deep-in-second"))]),
+            cat(
+                "second",
+                vec![ActivityNode::activity(act("deep-in-second"))],
+            ),
         ];
         let (_, acts) = flatten(&items);
         let path = |id: &str| {
@@ -789,7 +806,10 @@ mod tests {
                 .unwrap()
         };
         assert_eq!(path("inside"), vec![CategoryId::new("first")]);
-        assert!(path("after").is_empty(), "sibling after a category is top-level");
+        assert!(
+            path("after").is_empty(),
+            "sibling after a category is top-level"
+        );
         assert_eq!(path("deep-in-second"), vec![CategoryId::new("second")]);
     }
 
@@ -815,10 +835,16 @@ mod tests {
             vec!["explorer", "admin"]
         );
         // Nesting works the same in either group.
-        let users = acts.iter().find(|a| a.def.id == ActivityId::new("users")).unwrap();
+        let users = acts
+            .iter()
+            .find(|a| a.def.id == ActivityId::new("users"))
+            .unwrap();
         assert_eq!(users.path, vec![CategoryId::new("admin")]);
         // And a bare bottom entry is still top-level, not parented to anything.
-        let settings = acts.iter().find(|a| a.def.id == ActivityId::new("settings")).unwrap();
+        let settings = acts
+            .iter()
+            .find(|a| a.def.id == ActivityId::new("settings"))
+            .unwrap();
         assert!(settings.path.is_empty());
     }
 

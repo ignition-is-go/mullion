@@ -683,13 +683,7 @@ mod tests {
                         second: Box::new(PaneNode::leaf(PaneId::new("c"), D(3))),
                     }),
                 };
-                assert!(t.insert_leaf(
-                    &PaneId::new(dest),
-                    edge,
-                    PaneId::new("new"),
-                    D(9),
-                    None
-                ));
+                assert!(t.insert_leaf(&PaneId::new(dest), edge, PaneId::new("new"), D(9), None));
 
                 let keys = collect_split_keys(&t);
                 let unique: std::collections::HashSet<_> = keys.iter().cloned().collect();

@@ -8,7 +8,9 @@ pub mod tree;
 pub mod workspace;
 
 pub use activity::{ActivityDef, ActivityIcon, ActivityNode, ActivityRender, Category};
-pub use components::activity_bar::{ActivityBarBehavior, ActivityBarModifier, ActivityBarStyle};
+pub use components::activity_bar::{
+    ActivityBarBehavior, ActivityBarEdge, ActivityBarModifier, ActivityBarStyle,
+};
 pub use components::drop_overlay::DropOverlayStyle;
 pub use components::mullion_root::MullionStyle;
 pub use components::mullion_root::{MullionPaneTree, MullionProvider, MullionRoot};

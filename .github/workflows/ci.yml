@@ -21,21 +21,26 @@ env:
 jobs:
   validate:
     name: native, wasm, and demo
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-          targets: wasm32-unknown-unknown
+        run: |
+          rustup toolchain install stable \
+            --profile minimal \
+            --component clippy \
+            --component rustfmt \
+            --target wasm32-unknown-unknown
+          rustup default stable
 
       - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: |
             . -> target
@@ -65,3 +70,112 @@ jobs:
       - name: Build demo
         working-directory: examples/demo
         run: env -u NO_COLOR trunk build --release
+
+  release:
+    name: stamp, tag, and publish
+    needs: validate
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: write # Push the version commit/tag and create the GitHub release.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout main with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt
+          rustup default stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install cargo-flux
+        run: cargo install cargo-flux --version "$CARGO_FLUX_VERSION" --locked
+
+      - name: Prepare release
+        id: prepare
+        env:
+          TESTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          SUBJECT="$(git log -1 --format=%s)"
+          case "$SUBJECT" in
+            "chore(release): v"*)
+              TAG="${SUBJECT#chore(release): }"
+              git rev-parse "$TAG" >/dev/null
+              echo "Release commit already exists; ensuring $TAG has a GitHub release."
+              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          if [ "$(git rev-parse HEAD)" != "$TESTED_SHA" ]; then
+            echo "main advanced after the tested commit; its newer CI run will release it."
+            exit 0
+          fi
+
+          VERSION="$(cargo flux version)"
+          if [ -z "$VERSION" ]; then
+            echo "No release-worthy conventional commits since the latest tag."
+            exit 0
+          fi
+          TAG="v$VERSION"
+
+          cargo flux stamp "$VERSION"
+          cargo check --workspace
+          cargo fmt --all -- --check
+
+          while IFS= read -r FILE; do
+            case "$FILE" in
+              Cargo.toml|Cargo.lock) ;;
+              *)
+                echo "Unexpected release-stamp change: $FILE" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git diff --name-only)
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore(release): $TAG"
+          git tag "$TAG" -m "Release $VERSION"
+
+          echo "new_release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Push release commit and tag
+        if: steps.prepare.outputs.new_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          gh auth setup-git
+          git push --atomic origin HEAD:main "$TAG"
+
+      - name: Create GitHub release
+        if: steps.prepare.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already has a GitHub release."
+          else
+            gh release create "$TAG" \
+              --verify-tag \
+              --title "$TAG" \
+              --generate-notes \
+              --latest
+          fi

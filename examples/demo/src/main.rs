@@ -1,5 +1,6 @@
 use css_styled::{StyledComponent, StyledComponentBase, css, IntoCss};
 use leptos::prelude::*;
+use leptos_command_palette::{CommandPalette, CommandPaletteProvider};
 use md_icons::outlined;
 use mullion::*;
 use serde::{Deserialize, Serialize};
@@ -423,19 +424,23 @@ fn App() -> impl IntoView {
     let bottom_trailing = rule("var(--ml-border)");
 
     view! {
-        <style>{demo_css}</style>
-        <MullionProvider
-            initial_tree=default_workspace()
-            items=items()
-            bottom_items=bottom_items()
-            bottom_leading=bottom_leading
-            bottom_trailing=bottom_trailing
-            on_event=on_event
-            app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
-            new_pane=new_pane
-        >
-            <DemoLayout workspace_mgr=workspace_mgr />
-        </MullionProvider>
+        <CommandPaletteProvider>
+            <CommandPalette />
+            <style>{demo_css}</style>
+            <MullionProvider
+                initial_tree=default_workspace()
+                items=items()
+                bottom_items=bottom_items()
+                bottom_leading=bottom_leading
+                bottom_trailing=bottom_trailing
+                on_event=on_event
+                app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
+                new_pane=new_pane
+                focus_behavior=PaneFocusBehavior::Click
+            >
+                <DemoLayout workspace_mgr=workspace_mgr />
+            </MullionProvider>
+        </CommandPaletteProvider>
     }
 }
 
@@ -446,8 +451,23 @@ fn DemoLayout(workspace_mgr: WorkspaceManager<DemoData>) -> impl IntoView {
 
     let mgr = workspace_mgr.clone();
     let ctx_for_footer = ctx.clone();
+    let commands = MullionCommands::new(ctx.clone()).with_split_factory_fn(
+        |_focused, direction, data| {
+            let id = PaneId::new(format!("mux-{:.0}", web_sys::js_sys::Math::random() * 1e12));
+            let axis = match direction {
+                SplitDirection::Horizontal => "horizontal",
+                SplitDirection::Vertical => "vertical",
+            };
+            Some((id, DemoData {
+                label: format!("{} ({axis} split)", data.label),
+                ..data.clone()
+            }))
+        },
+    );
 
     view! {
+        <MullionKeybindings commands=commands.clone() />
+        <MullionCommandPalette commands=commands />
         <div class=DemoLayoutStyle::SCOPE>
             <div class=DemoLayoutStyle::CONTENT>
                 <MullionPaneTree ctx=ctx />

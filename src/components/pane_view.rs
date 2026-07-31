@@ -3,6 +3,7 @@ use leptos_resize_handle::{use_drag, Direction as LrhDirection};
 
 use crate::context::MullionContext;
 use crate::drag::DragPayload;
+use crate::focus::PaneFocusBehavior;
 use crate::theme::MullionTheme;
 use crate::tree::{
     collect_split_keys, find_split_direction, leaf_rect, split_parent_rect, ActivityId, PaneData,
@@ -62,7 +63,13 @@ pub fn PaneView<D: PaneData + Send + Sync>(ctx: MullionContext<D>) -> impl IntoV
     let leaves = Memo::new(move |_| ctx_leaves.tree.with(|t| t.leaf_ids()));
 
     let ctx_splits = ctx.clone();
-    let splits = Memo::new(move |_| ctx_splits.tree.with(|t| collect_split_keys(t)));
+    let splits = Memo::new(move |_| {
+        if ctx_splits.zoomed_pane.get().is_some() {
+            Vec::new()
+        } else {
+            ctx_splits.tree.with(|t| collect_split_keys(t))
+        }
+    });
 
     let container_ref: NodeRef<leptos::html::Div> = NodeRef::new();
 
@@ -108,7 +115,17 @@ fn LeafSlot<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
         })
     });
 
+    let zoomed_pane = ctx.zoomed_pane;
+    let id_for_zoom = id.clone();
     let slot_style = move || {
+        if let Some(zoomed) = zoomed_pane.get() {
+            if zoomed == id_for_zoom {
+                return "position:absolute;inset:0;display:flex;overflow:hidden;z-index:1"
+                    .to_string();
+            }
+            return "position:absolute;inset:0;display:flex;overflow:hidden;visibility:hidden;pointer-events:none"
+                .to_string();
+        }
         let r = rect.get();
         format!(
             "position:absolute;left:{}%;top:{}%;width:{}%;height:{}%;display:flex;overflow:hidden",
@@ -161,6 +178,7 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
     let active_activity: Signal<Option<ActivityId>> = activity_memo.into();
 
     let ctx_focus = ctx.clone();
+    let ctx_click_focus = ctx.clone();
     let ctx_ref = ctx.clone();
     let pane_ref: NodeRef<leptos::html::Div> = NodeRef::new();
 
@@ -171,11 +189,16 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
     });
 
     let id_focus = id.clone();
+    let id_click_focus = id.clone();
     let id_bar = id.clone();
     let id_content = id.clone();
     let id_drop = id.clone();
     let id_hover = id.clone();
     let ctx_hover = ctx.clone();
+    let focus_behavior = ctx.focus_behavior;
+    let focused_pane = ctx.focused_pane;
+    let focused_pane_attr = ctx.focused_pane;
+    let id_focused_attr = id.clone();
 
     // Does this pane hide its activity bar? (Role is stable for a pane's lifetime,
     // so evaluate the host predicate once, untracked.)
@@ -198,6 +221,7 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
     // fn, which can read live signals. `box-sizing:border-box` keeps the 2px
     // inside the pane.
     let id_border = id.clone();
+    let id_focused_style = id.clone();
     let border_fn = ctx.pane_border_color.clone();
     let edge = ctx.activity_bar_edge;
     let pane_style = move || {
@@ -206,20 +230,42 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
         } else {
             ""
         };
-        match border_fn.as_ref().and_then(|f| f(id_border.clone())) {
+        let focus_ring = if focused_pane.get().as_ref() == Some(&id_focused_style) {
+            "box-shadow:inset 0 0 0 1px var(--ml-highlight);"
+        } else {
+            ""
+        };
+        let border = match border_fn.as_ref().and_then(|f| f(id_border.clone())) {
             Some(color) => {
-                format!("{direction}box-sizing:border-box;border-bottom:2px solid {color};")
+                format!("box-sizing:border-box;border-bottom:2px solid {color};")
             }
-            None => direction.to_string(),
-        }
+            None => String::new(),
+        };
+        format!("{direction}{focus_ring}{border}")
     };
 
     view! {
         <div
             class=PaneStyle::SCOPE
+            data-mullion-focused=move || {
+                if focused_pane_attr.get().as_ref() == Some(&id_focused_attr) {
+                    "true"
+                } else {
+                    "false"
+                }
+            }
             node_ref=pane_ref
             style=pane_style
-            on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id_focus.clone())); }
+            on:mouseenter=move |_| {
+                if focus_behavior == PaneFocusBehavior::Hover {
+                    ctx_focus.focus_pane(&id_focus);
+                }
+            }
+            on:mousedown=move |_| {
+                if focus_behavior == PaneFocusBehavior::Click {
+                    ctx_click_focus.focus_pane(&id_click_focus);
+                }
+            }
         >
             {(!hide_bar).then(|| {
                 let app_icon = ctx.app_icon.clone();
@@ -242,9 +288,9 @@ const HC_SPLIT_H: &str = r#"<svg viewBox="0 0 16 16" width="13" height="13" fill
 const HC_SPLIT_V: &str = r#"<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M14 1H2a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 2h12v5.5H2V2zm0 6.5h12V14H2V8.5z"/></svg>"#;
 const HC_CLOSE: &str = r#"<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 8.707l3.646 3.647.708-.707L8.707 8l3.647-3.646-.707-.708L8 7.293 4.354 3.646l-.707.708L7.293 8l-3.646 3.646.707.708L8 8.707z"/></svg>"#;
 
-/// The management strip for a bar-less pane: split / close / drag-move, revealed on
-/// hover (reuses the pane's `focused_pane` tracking). Keeps a hidden-bar pane fully
-/// manageable even though it has no activity bar.
+/// The management strip for a bar-less pane: split / close / drag-move, revealed
+/// while the pane is focused. Keeps a hidden-bar pane fully manageable even
+/// though it has no activity bar.
 #[component]
 fn PaneHoverControls<D: PaneData + Send + Sync>(
     pane_id: PaneId,

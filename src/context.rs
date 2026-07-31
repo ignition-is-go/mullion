@@ -13,9 +13,11 @@ use crate::components::pane_view::PaneStyle;
 use crate::components::split_handle::SplitHandleStyle;
 use crate::drag::DragPayload;
 use crate::events::PaneEvent;
+use crate::focus::PaneFocusBehavior;
 use crate::theme::MullionTheme;
 use crate::tree::{
-    collect_split_ratios, find_ratio, ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode,
+    collect_split_ratios, directional_neighbor, find_ratio, resize_boundary, ActivityId,
+    CategoryId, DropEdge, PaneData, PaneDirection, PaneId, PaneLayout, PaneNode, PaneRotation,
     SplitDirection,
 };
 
@@ -113,8 +115,19 @@ pub struct MullionContext<D: PaneData> {
     pub(crate) categories: StoredValue<Vec<CategoryMeta>>,
     /// Event sink — write end. Every mutation pushes an event here.
     event_tx: StoredValue<Box<dyn Fn(PaneEvent<D>) + Send + Sync>>,
-    /// The pane the mouse is currently over.
+    /// The pane that receives focus-relative commands.
+    ///
+    /// Pointer interaction updates this according to [`Self::focus_behavior`];
+    /// applications may also read or set it directly, or use
+    /// [`Self::focus_pane`].
     pub focused_pane: RwSignal<Option<PaneId>>,
+    /// Whether hovering or clicking acquires pane focus.
+    pub focus_behavior: PaneFocusBehavior,
+    /// The pane temporarily occupying the full Mullion viewport.
+    ///
+    /// This is presentation state: toggling zoom does not rewrite or emit a
+    /// persisted tree snapshot.
+    pub zoomed_pane: RwSignal<Option<PaneId>>,
     /// What is currently being dragged, if anything — an existing pane being
     /// relocated, or an activity being placed as a new pane. See
     /// [`DragPayload`]; for the common narrow questions use
@@ -202,6 +215,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             .into_iter()
             .map(|(k, r)| (k, ArcRwSignal::new(r)))
             .collect();
+        let initial_focus = initial_tree.leaf_ids().into_iter().next();
 
         MullionContext {
             tree: RwSignal::new(initial_tree),
@@ -211,7 +225,9 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             activities: StoredValue::new(all_activities),
             categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
-            focused_pane: RwSignal::new(None),
+            focused_pane: RwSignal::new(initial_focus),
+            focus_behavior: PaneFocusBehavior::default(),
+            zoomed_pane: RwSignal::new(None),
             drag: RwSignal::new(None),
             theme,
             mullion_style,
@@ -242,6 +258,12 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     /// changing that long-standing constructor signature.
     pub fn with_activity_bar_edge(mut self, edge: ActivityBarEdge) -> Self {
         self.activity_bar_edge = edge;
+        self
+    }
+
+    /// Configure how pointer interaction acquires pane focus.
+    pub fn with_focus_behavior(mut self, behavior: PaneFocusBehavior) -> Self {
+        self.focus_behavior = behavior;
         self
     }
 
@@ -313,6 +335,112 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         });
     }
 
+    fn reconcile_interaction_state(&self, preferred_focus: Option<PaneId>) {
+        let ids = self.tree.with_untracked(PaneNode::leaf_ids);
+        let current = self.focused_pane.get_untracked();
+        let next = current
+            .filter(|id| ids.contains(id))
+            .or_else(|| preferred_focus.filter(|id| ids.contains(id)))
+            .or_else(|| ids.first().cloned());
+        self.focused_pane.set(next);
+
+        if self
+            .zoomed_pane
+            .get_untracked()
+            .as_ref()
+            .is_some_and(|id| !ids.contains(id))
+        {
+            self.zoomed_pane.set(None);
+        }
+    }
+
+    /// Pane ids in the layout's stable traversal order.
+    pub fn pane_ids(&self) -> Vec<PaneId> {
+        self.tree.with_untracked(PaneNode::leaf_ids)
+    }
+
+    /// Resolve the currently focused pane, repairing stale focus after an
+    /// upstream tree replacement by selecting the first remaining pane.
+    pub fn focused_pane_id(&self) -> Option<PaneId> {
+        let current = self.focused_pane.get_untracked();
+        if current
+            .as_ref()
+            .is_some_and(|id| self.tree.with_untracked(|tree| tree.contains(id)))
+        {
+            return current;
+        }
+        let first = self
+            .tree
+            .with_untracked(|tree| tree.leaf_ids().into_iter().next());
+        self.focused_pane.set(first.clone());
+        first
+    }
+
+    /// Focus a pane by id. Returns `false` when the pane is not in this layout.
+    pub fn focus_pane(&self, pane: &PaneId) -> bool {
+        if !self.tree.with_untracked(|tree| tree.contains(pane)) {
+            return false;
+        }
+        self.focused_pane.set(Some(pane.clone()));
+        // A zoomed layout remains zoomed while focus commands switch which pane
+        // occupies the viewport, matching terminal multiplexer behavior.
+        if self.zoomed_pane.get_untracked().is_some() {
+            self.zoomed_pane.set(Some(pane.clone()));
+        }
+        true
+    }
+
+    /// Focus the visually nearest pane in a direction.
+    pub fn focus_neighbor(&self, direction: PaneDirection) -> bool {
+        let Some(current) = self.focused_pane_id() else {
+            return false;
+        };
+        let next = self.tree.with_untracked(|tree| {
+            directional_neighbor(tree, &current, direction, |key| {
+                self.ratio_signal(key).get_untracked()
+            })
+        });
+        next.as_ref().is_some_and(|pane| self.focus_pane(pane))
+    }
+
+    /// Focus the next or previous pane in traversal order, wrapping at either
+    /// end. A positive offset moves forward; a negative offset moves backward.
+    pub fn cycle_focus(&self, offset: isize) -> bool {
+        let ids = self.pane_ids();
+        if ids.is_empty() {
+            return false;
+        }
+        let current = self.focused_pane_id();
+        let index = current
+            .as_ref()
+            .and_then(|current| ids.iter().position(|id| id == current))
+            .unwrap_or(0);
+        let next = (index as isize + offset).rem_euclid(ids.len() as isize) as usize;
+        self.focus_pane(&ids[next])
+    }
+
+    /// Focus a pane by zero-based traversal index.
+    pub fn focus_pane_at(&self, index: usize) -> bool {
+        self.pane_ids()
+            .get(index)
+            .is_some_and(|pane| self.focus_pane(pane))
+    }
+
+    /// Toggle whether the focused pane occupies the full Mullion viewport.
+    ///
+    /// Zoom is local presentation state and does not emit a pane event.
+    pub fn toggle_zoom(&self) -> bool {
+        let Some(focused) = self.focused_pane_id() else {
+            return false;
+        };
+        if self.zoomed_pane.get_untracked().as_ref() == Some(&focused) {
+            self.zoomed_pane.set(None);
+        } else {
+            self.zoomed_pane.set(Some(focused));
+        }
+        true
+    }
+
     /// Split a pane. The consumer provides the new pane's id.
     pub fn split_pane(
         &self,
@@ -321,27 +449,60 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         new_id: PaneId,
         new_data: D,
     ) {
+        self.try_split_pane(target, direction, new_id, new_data);
+    }
+
+    /// Fallible form of [`Self::split_pane`].
+    ///
+    /// Returns `false` for an unknown target or a duplicate new pane id and
+    /// emits nothing in either case.
+    pub fn try_split_pane(
+        &self,
+        target: &PaneId,
+        direction: SplitDirection,
+        new_id: PaneId,
+        new_data: D,
+    ) -> bool {
+        if self
+            .tree
+            .with_untracked(|tree| !tree.contains(target) || tree.contains(&new_id))
+        {
+            return false;
+        }
+        let mut split = false;
         self.tree.update(|tree| {
-            tree.split(target, direction, new_id.clone(), new_data.clone());
+            split = tree.split(target, direction, new_id.clone(), new_data.clone());
         });
+        if !split {
+            return false;
+        }
         self.reseed_ratios();
         self.emit(PaneEvent::Split {
             target: target.clone(),
             direction,
-            new_id,
+            new_id: new_id.clone(),
             new_data,
         });
         self.emit_tree_changed();
+        self.focus_pane(&new_id);
+        true
     }
 
     /// Close a pane. Returns the closed pane's data if found.
     pub fn close_pane(&self, id: &PaneId) -> Option<D> {
+        let ids = self.pane_ids();
+        let preferred_focus = ids.iter().position(|pane| pane == id).and_then(|index| {
+            ids.get(index + 1)
+                .or_else(|| index.checked_sub(1).and_then(|previous| ids.get(previous)))
+                .cloned()
+        });
         let mut closed_data = None;
         self.tree.update(|tree| {
             closed_data = tree.close(id);
         });
         if let Some(ref data) = closed_data {
             self.reseed_ratios();
+            self.reconcile_interaction_state(preferred_focus);
             self.emit(PaneEvent::Closed {
                 id: id.clone(),
                 data: data.clone(),
@@ -391,18 +552,33 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
 
     /// Change the split direction of a pane's parent.
     pub fn change_split_direction(&self, pane: &PaneId, direction: SplitDirection) {
+        self.try_change_split_direction(pane, direction);
+    }
+
+    /// Fallible form of [`Self::change_split_direction`].
+    pub fn try_change_split_direction(&self, pane: &PaneId, direction: SplitDirection) -> bool {
+        let mut changed = false;
         self.tree.update(|tree| {
-            tree.change_direction(pane, direction);
+            changed = tree.change_direction(pane, direction);
         });
+        if !changed {
+            return false;
+        }
         self.emit(PaneEvent::DirectionChanged {
             pane: pane.clone(),
             direction,
         });
         self.emit_tree_changed();
+        true
     }
 
     /// Move a pane to a new position relative to a destination pane.
     pub fn move_pane(&self, source: &PaneId, destination: &PaneId, edge: DropEdge) {
+        self.try_move_pane(source, destination, edge);
+    }
+
+    /// Fallible form of [`Self::move_pane`].
+    pub fn try_move_pane(&self, source: &PaneId, destination: &PaneId, edge: DropEdge) -> bool {
         let mut success = false;
         self.tree.update(|tree| {
             success = tree.move_pane(source, destination, edge);
@@ -416,6 +592,107 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             });
             self.emit_tree_changed();
         }
+        success
+    }
+
+    /// Find the visually nearest pane to `pane` in a direction.
+    pub fn pane_neighbor(&self, pane: &PaneId, direction: PaneDirection) -> Option<PaneId> {
+        self.tree.with_untracked(|tree| {
+            directional_neighbor(tree, pane, direction, |key| {
+                self.ratio_signal(key).get_untracked()
+            })
+        })
+    }
+
+    /// Swap two panes without changing the split topology.
+    pub fn swap_panes(&self, first: &PaneId, second: &PaneId) -> bool {
+        let mut swapped = false;
+        self.tree.update(|tree| {
+            swapped = tree.swap_panes(first, second);
+        });
+        if swapped {
+            self.reseed_ratios();
+            self.emit_tree_changed();
+        }
+        swapped
+    }
+
+    /// Rotate every pane through the existing layout slots.
+    pub fn rotate_panes(&self, rotation: PaneRotation) -> bool {
+        let mut rotated = false;
+        self.tree.update(|tree| {
+            rotated = tree.rotate_panes(rotation);
+        });
+        if rotated {
+            self.reseed_ratios();
+            self.emit_tree_changed();
+        }
+        rotated
+    }
+
+    /// Reset every split ratio to an equal half.
+    pub fn balance_splits(&self) -> bool {
+        let mut count = 0;
+        self.tree.update_untracked(|tree| {
+            count = tree.balance_splits();
+        });
+        if count == 0 {
+            return false;
+        }
+        self.reseed_ratios();
+        let mut splits = Vec::new();
+        self.tree
+            .with_untracked(|tree| collect_split_ratios(tree, &mut splits));
+        for (split_key, ratio) in splits {
+            self.emit(PaneEvent::Resized { split_key, ratio });
+        }
+        self.emit_tree_changed();
+        true
+    }
+
+    /// Rebuild the pane tree using a standard layout.
+    pub fn apply_layout(&self, layout: PaneLayout) -> bool {
+        let focused = self.focused_pane_id();
+        let mut applied = false;
+        self.tree.update(|tree| {
+            applied = tree.apply_layout(layout, focused.as_ref());
+        });
+        if applied {
+            self.reseed_ratios();
+            self.emit_tree_changed();
+        }
+        applied
+    }
+
+    /// Grow the pane toward its nearest boundary in `direction` by `amount`.
+    pub fn resize_pane_toward(&self, pane: &PaneId, direction: PaneDirection, amount: f64) -> bool {
+        if !amount.is_finite() || amount <= 0.0 {
+            return false;
+        }
+        let boundary = self
+            .tree
+            .with_untracked(|tree| resize_boundary(tree, pane, direction));
+        let Some((split_key, sign)) = boundary else {
+            return false;
+        };
+        let current = self.ratio_signal(&split_key).get_untracked();
+        self.resize_split(&split_key, current + sign * amount);
+        true
+    }
+
+    /// Toggle the direction of the split immediately containing `pane`.
+    pub fn toggle_parent_split_direction(&self, pane: &PaneId) -> bool {
+        let current = self
+            .tree
+            .with_untracked(|tree| tree.parent_split_direction(pane));
+        let Some(current) = current else {
+            return false;
+        };
+        let next = match current {
+            SplitDirection::Horizontal => SplitDirection::Vertical,
+            SplitDirection::Vertical => SplitDirection::Horizontal,
+        };
+        self.try_change_split_direction(pane, next)
     }
 
     /// The pane currently being relocated, or `None` if nothing is being
@@ -467,10 +744,11 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             activity: activity.clone(),
             destination: destination.clone(),
             edge,
-            new_id,
+            new_id: new_id.clone(),
             new_data,
         });
         self.emit_tree_changed();
+        self.focus_pane(&new_id);
     }
 
     /// Set the active activity for a pane.
@@ -563,6 +841,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     pub fn update_tree(&self, f: impl FnOnce(&mut PaneNode<D>)) {
         self.tree.update(f);
         self.reseed_ratios();
+        self.reconcile_interaction_state(None);
         self.emit_tree_changed();
     }
 
@@ -570,6 +849,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     pub fn set_tree(&self, new_tree: PaneNode<D>) {
         self.tree.set(new_tree);
         self.reseed_ratios();
+        self.reconcile_interaction_state(None);
     }
 
     /// Register a pane's DOM element (called internally by PaneView on mount).

@@ -11,6 +11,10 @@ Named after the vertical bars between window panes in architecture.
 - **Splittable panes** -- split horizontally or vertically, resize by dragging, close panes
 - **Activity bar** -- place it on any pane edge, with collapsible categories and hover labels
 - **Drag and drop** -- move panes between positions by dragging the app icon
+- **Focused panes** -- durable focus with configurable hover or click acquisition
+- **Pane commands** -- navigate, split, close, move, swap, resize, rotate, balance, lay out, and zoom panes
+- **Mux keybindings** -- opt-in, customizable `Ctrl+B` prefix map modeled after tmux
+- **Command palettes** -- optional `leptos-command-palette` command adapter
 - **Workspaces** -- named layouts you can switch between
 - **Theming** -- all styling via Rust structs passed through `provide_context`, zero CSS required
 - **Events** -- stream of pane events for persistence
@@ -152,6 +156,91 @@ horizontally. On horizontal edges the primary group flows from the left and
 `bottom_items` becomes the trailing group on the right. Hover expansion applies
 to one item at a time, and an auto-hidden bar reveals from its configured edge.
 
+## Focus and pane commands
+
+The first pane starts focused. Focus is durable state in `ctx.focused_pane`, is
+visually marked with the theme's `--ml-highlight` color, and drives every
+focus-relative command. Choose how pointer interaction changes it:
+
+```rust
+view! {
+    <MullionProvider
+        initial_tree=tree
+        items=items
+        focus_behavior=PaneFocusBehavior::Click // default: Hover
+        on_event=|_| {}
+    >
+        <AppLayout />
+    </MullionProvider>
+}
+```
+
+`Hover` preserves Mullion's historical focus-follows-pointer behavior. `Click`
+keeps focus on the last pane pressed. Programmatic focus works in either mode.
+
+`MullionCommands<D>` is the dependency-free command dispatcher. Split commands
+require a host factory because Mullion cannot invent application ids or data:
+
+```rust
+#[component]
+fn PaneControls() -> impl IntoView {
+    let ctx = expect_context::<MullionContext<MyData>>();
+    let commands = MullionCommands::new(ctx)
+        .with_split_factory_fn(|focused, direction, data| {
+            Some((allocate_pane_id(focused, direction), data.clone()))
+        });
+
+    view! {
+        <MullionKeybindings commands=commands />
+    }
+}
+```
+
+The command catalog covers directional/next/previous/indexed focus; horizontal
+and vertical split; close; directional move, swap, and resize; parent split
+orientation; balancing and rotation; even-horizontal, even-vertical,
+main-horizontal, main-vertical, and tiled layouts; and focused-pane zoom.
+Commands return `PaneCommandResult`, so an app can surface cases such as a
+missing neighbor, refused split, or attempt to close the last pane.
+
+### Default mux keymap
+
+`MullionKeybindings` is opt-in and renders no DOM. Its default
+`MullionKeymap::tmux()` consumes one key after `Ctrl+B`; editable elements are
+ignored. Build a custom map with `MullionKeymap::new`, `bind`, and
+`with_binding`. Focus behavior, commands, chords, bindings, and keymaps all
+implement Serde traits, so applications can store this interaction setup as
+configuration.
+
+| After `Ctrl+B` | Command |
+|---|---|
+| `h/j/k/l` or arrows | Focus left/down/up/right |
+| `1`…`9`, `o`, `;` | Focus by index, next, previous |
+| `%`, `"` | Split left/right, top/bottom |
+| `x`, `z` | Close, toggle zoom |
+| `Shift` + arrows or `H/J/K/L` | Move focused pane |
+| `Alt` + arrows or `h/j/k/l` | Swap with directional neighbor |
+| `Ctrl` + arrows or `h/j/k/l` | Grow toward that boundary |
+| `{`, `}` | Swap with previous/next pane |
+| `Space`, `e` | Toggle parent direction, balance splits |
+| `Ctrl+O`, `Alt+O` | Rotate forward/backward |
+| `Alt+1`…`Alt+5` | Apply the five standard layouts |
+
+### Command-palette integration
+
+Enable the optional adapter:
+
+```toml
+mullion = { git = "https://github.com/ignition-is-go/mullion.git", features = ["command-palette"] }
+```
+
+Mount `<MullionCommandPalette commands=commands />` under a
+`leptos_command_palette::CommandPaletteProvider` to register and automatically
+clean up Mullion's catalog. Apps with their own registration lifecycle can call
+`mullion_palette_commands(commands)` and merge the returned `Vec<Command>`
+instead. The live “Focus Pane…” submenu is generated from the current layout;
+split entries are omitted until the dispatcher has a split factory.
+
 ## Components
 
 | Component | Purpose |
@@ -159,6 +248,8 @@ to one item at a time, and an auto-hidden bar reveals from its configured edge.
 | `MullionRoot` | All-in-one: provides context and renders the pane tree |
 | `MullionProvider` | Context-only provider, render children with full layout control |
 | `MullionPaneTree` | Renders just the pane tree (use inside `MullionProvider`) |
+| `MullionKeybindings` | Opt-in global listener for a prefix keymap |
+| `MullionCommandPalette` | Feature-gated command registration adapter |
 | `WorkspaceSwitcher` | Batteries-included workspace tab bar |
 | `MullionOverlay` | Portals content above all chrome, for modals that must escape their pane |
 
@@ -241,14 +332,26 @@ ctx.close_pane(&pane_id);
 ctx.resize_split(&split_key, 0.5);  // split_key = first leaf id under the split's `second` subtree
 ctx.move_pane(&source_id, &dest_id, DropEdge::Right);
 ctx.change_split_direction(&pane_id, SplitDirection::Vertical);
+ctx.swap_panes(&first_id, &second_id);
+ctx.rotate_panes(PaneRotation::Forward);
+ctx.balance_splits();
+ctx.apply_layout(PaneLayout::Tiled);
+ctx.resize_pane_toward(&pane_id, PaneDirection::Left, 0.05);
 ctx.set_active_activity(&pane_id, Some(ActivityId::new("files")));
+
+// Focus and view state
+ctx.focus_pane(&pane_id);
+ctx.focus_neighbor(PaneDirection::Right);
+ctx.cycle_focus(1);
+ctx.toggle_zoom();
 
 // Pane data
 ctx.update_pane_data(&pane_id, new_data);  // Update a single pane's data
 ctx.pane_data(&pane_id);                   // Read a pane's data
 
 // Read state
-ctx.focused_pane.get()       // Option<PaneId> -- pane under mouse
+ctx.focused_pane.get()       // Option<PaneId> -- command target
+ctx.zoomed_pane.get()        // Option<PaneId> -- full-viewport pane
 ctx.dragging_pane.get()      // Option<PaneId> -- pane being dragged
 ctx.pane_element(&pane_id)   // Option<HtmlElement> -- DOM ref for positioning
 ctx.pane_rect(&pane_id)      // Option<DomRect> -- bounding rect

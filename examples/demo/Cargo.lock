@@ -1093,6 +1093,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "leptos-command-palette"
+version = "0.1.0"
+source = "git+https://github.com/ignition-is-go/leptos-command-palette.git?rev=42350c771de43b4df54a13f63394c6e28ec4272e#42350c771de43b4df54a13f63394c6e28ec4272e"
+dependencies = [
+ "leptos",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "leptos-resize-handle"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1325,10 +1335,11 @@ dependencies = [
 
 [[package]]
 name = "mullion"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "css-styled",
  "leptos",
+ "leptos-command-palette",
  "leptos-resize-handle",
  "send_wrapper",
  "serde",
@@ -1344,6 +1355,7 @@ dependencies = [
  "console_error_panic_hook",
  "css-styled",
  "leptos",
+ "leptos-command-palette",
  "md-icons",
  "mullion",
  "serde",

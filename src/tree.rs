@@ -33,6 +33,52 @@ pub enum SplitDirection {
     Vertical,
 }
 
+/// A direction relative to a pane's rendered position.
+///
+/// Unlike [`SplitDirection`], this describes navigation and manipulation in
+/// screen space rather than the axis of a split.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PaneDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+impl PaneDirection {
+    /// The drop edge used when moving a pane in this direction.
+    pub fn drop_edge(self) -> DropEdge {
+        match self {
+            PaneDirection::Left => DropEdge::Left,
+            PaneDirection::Right => DropEdge::Right,
+            PaneDirection::Up => DropEdge::Top,
+            PaneDirection::Down => DropEdge::Bottom,
+        }
+    }
+}
+
+/// Standard whole-tree layouts available to pane commands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PaneLayout {
+    /// Equal-width columns.
+    EvenHorizontal,
+    /// Equal-height rows.
+    EvenVertical,
+    /// A large focused pane above equal-width secondary panes.
+    MainHorizontal,
+    /// A large focused pane left of equal-height secondary panes.
+    MainVertical,
+    /// A balanced, alternating grid.
+    Tiled,
+}
+
+/// Direction used when rotating pane contents through the current layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PaneRotation {
+    Forward,
+    Backward,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DropEdge {
     Top,
@@ -364,6 +410,140 @@ impl<D: PaneData> PaneNode<D> {
         }
     }
 
+    /// Swap two leaf panes while keeping the split topology and ratios intact.
+    ///
+    /// The entire leaf (id, active activity, and data) moves, which lets the
+    /// flat renderer preserve each keyed pane component while changing its
+    /// position.
+    pub fn swap_panes(&mut self, first_id: &PaneId, second_id: &PaneId) -> bool {
+        if first_id == second_id {
+            return false;
+        }
+        let Some(first_path) = leaf_path(self, first_id) else {
+            return false;
+        };
+        let Some(second_path) = leaf_path(self, second_id) else {
+            return false;
+        };
+        let first = node_at_path(self, &first_path).clone();
+        let second = node_at_path(self, &second_path).clone();
+        *node_at_path_mut(self, &first_path) = second;
+        *node_at_path_mut(self, &second_path) = first;
+        true
+    }
+
+    /// Rotate every leaf through the existing layout slots.
+    ///
+    /// Split directions and ratios remain unchanged. Returns `false` when
+    /// there are fewer than two panes.
+    pub fn rotate_panes(&mut self, rotation: PaneRotation) -> bool {
+        let paths = leaf_paths(self);
+        if paths.len() < 2 {
+            return false;
+        }
+        let leaves: Vec<_> = paths
+            .iter()
+            .map(|path| node_at_path(self, path).clone())
+            .collect();
+        let count = leaves.len();
+        for (index, path) in paths.iter().enumerate() {
+            let source = match rotation {
+                // Each pane advances to the next layout slot.
+                PaneRotation::Forward => (index + count - 1) % count,
+                PaneRotation::Backward => (index + 1) % count,
+            };
+            *node_at_path_mut(self, path) = leaves[source].clone();
+        }
+        true
+    }
+
+    /// Set every split ratio in the tree to `0.5`.
+    ///
+    /// Returns the number of splits encountered, including splits that were
+    /// already balanced.
+    pub fn balance_splits(&mut self) -> usize {
+        match self {
+            PaneNode::Leaf { .. } => 0,
+            PaneNode::Split {
+                ratio,
+                first,
+                second,
+                ..
+            } => {
+                *ratio = 0.5;
+                1 + first.balance_splits() + second.balance_splits()
+            }
+        }
+    }
+
+    /// Rebuild the split topology using a standard layout.
+    ///
+    /// Leaf panes are retained intact and in their current traversal order.
+    /// `main` selects the large pane for the two main-pane layouts; if it is
+    /// absent or unknown, the first pane is used. Returns `false` for a
+    /// single-pane tree, where every layout is equivalent.
+    pub fn apply_layout(&mut self, layout: PaneLayout, main: Option<&PaneId>) -> bool {
+        let mut leaves: Vec<_> = leaf_paths(self)
+            .iter()
+            .map(|path| node_at_path(self, path).clone())
+            .collect();
+        if leaves.len() < 2 {
+            return false;
+        }
+
+        if matches!(
+            layout,
+            PaneLayout::MainHorizontal | PaneLayout::MainVertical
+        ) {
+            if let Some(main) = main {
+                if let Some(index) = leaves
+                    .iter()
+                    .position(|leaf| matches!(leaf, PaneNode::Leaf { id, .. } if id == main))
+                {
+                    leaves.swap(0, index);
+                }
+            }
+        }
+
+        *self = match layout {
+            PaneLayout::EvenHorizontal => build_even_layout(leaves, SplitDirection::Horizontal),
+            PaneLayout::EvenVertical => build_even_layout(leaves, SplitDirection::Vertical),
+            PaneLayout::MainHorizontal => {
+                build_main_layout(leaves, SplitDirection::Vertical, SplitDirection::Horizontal)
+            }
+            PaneLayout::MainVertical => {
+                build_main_layout(leaves, SplitDirection::Horizontal, SplitDirection::Vertical)
+            }
+            PaneLayout::Tiled => build_tiled_layout(leaves, SplitDirection::Horizontal),
+        };
+        true
+    }
+
+    /// Direction of the split immediately containing `target`.
+    pub fn parent_split_direction(&self, target: &PaneId) -> Option<SplitDirection> {
+        match self {
+            PaneNode::Leaf { .. } => None,
+            PaneNode::Split {
+                direction,
+                first,
+                second,
+                ..
+            } => {
+                let direct = matches!(first.as_ref(), PaneNode::Leaf { id, .. } if id == target)
+                    || matches!(second.as_ref(), PaneNode::Leaf { id, .. } if id == target);
+                if direct {
+                    Some(*direction)
+                } else if first.contains(target) {
+                    first.parent_split_direction(target)
+                } else if second.contains(target) {
+                    second.parent_split_direction(target)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Returns a reference to the id of the leftmost leaf under this node.
     ///
     /// O(depth), unlike `leaf_ids().into_iter().next()` which is O(subtree
@@ -379,6 +559,143 @@ impl<D: PaneData> PaneNode<D> {
                 PaneNode::Split { first, .. } => node = first,
             }
         }
+    }
+}
+
+/// `false` selects a split's first child and `true` its second child.
+type PanePath = Vec<bool>;
+
+fn leaf_path<D: PaneData>(tree: &PaneNode<D>, target: &PaneId) -> Option<PanePath> {
+    fn walk<D: PaneData>(node: &PaneNode<D>, target: &PaneId, path: &mut PanePath) -> bool {
+        match node {
+            PaneNode::Leaf { id, .. } => id == target,
+            PaneNode::Split { first, second, .. } => {
+                path.push(false);
+                if walk(first, target, path) {
+                    return true;
+                }
+                path.pop();
+                path.push(true);
+                if walk(second, target, path) {
+                    return true;
+                }
+                path.pop();
+                false
+            }
+        }
+    }
+
+    let mut path = Vec::new();
+    walk(tree, target, &mut path).then_some(path)
+}
+
+fn leaf_paths<D: PaneData>(tree: &PaneNode<D>) -> Vec<PanePath> {
+    fn walk<D: PaneData>(node: &PaneNode<D>, path: &mut PanePath, out: &mut Vec<PanePath>) {
+        match node {
+            PaneNode::Leaf { .. } => out.push(path.clone()),
+            PaneNode::Split { first, second, .. } => {
+                path.push(false);
+                walk(first, path, out);
+                path.pop();
+                path.push(true);
+                walk(second, path, out);
+                path.pop();
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    walk(tree, &mut Vec::new(), &mut out);
+    out
+}
+
+fn node_at_path<'a, D: PaneData>(mut node: &'a PaneNode<D>, path: &[bool]) -> &'a PaneNode<D> {
+    for second_child in path {
+        node = match node {
+            PaneNode::Split { first, second, .. } => {
+                if *second_child {
+                    second
+                } else {
+                    first
+                }
+            }
+            PaneNode::Leaf { .. } => unreachable!("leaf path cannot descend through a leaf"),
+        };
+    }
+    node
+}
+
+fn node_at_path_mut<'a, D: PaneData>(
+    mut node: &'a mut PaneNode<D>,
+    path: &[bool],
+) -> &'a mut PaneNode<D> {
+    for second_child in path {
+        node = match node {
+            PaneNode::Split { first, second, .. } => {
+                if *second_child {
+                    second
+                } else {
+                    first
+                }
+            }
+            PaneNode::Leaf { .. } => unreachable!("leaf path cannot descend through a leaf"),
+        };
+    }
+    node
+}
+
+fn build_even_layout<D: PaneData>(
+    mut leaves: Vec<PaneNode<D>>,
+    direction: SplitDirection,
+) -> PaneNode<D> {
+    if leaves.len() == 1 {
+        return leaves.pop().expect("one leaf");
+    }
+    let count = leaves.len();
+    let first = leaves.remove(0);
+    let second = build_even_layout(leaves, direction);
+    PaneNode::Split {
+        direction,
+        ratio: 1.0 / count as f64,
+        first: Box::new(first),
+        second: Box::new(second),
+    }
+}
+
+fn build_main_layout<D: PaneData>(
+    mut leaves: Vec<PaneNode<D>>,
+    main_direction: SplitDirection,
+    secondary_direction: SplitDirection,
+) -> PaneNode<D> {
+    let main = leaves.remove(0);
+    let secondary = build_even_layout(leaves, secondary_direction);
+    PaneNode::Split {
+        direction: main_direction,
+        ratio: 0.6,
+        first: Box::new(main),
+        second: Box::new(secondary),
+    }
+}
+
+fn build_tiled_layout<D: PaneData>(
+    mut leaves: Vec<PaneNode<D>>,
+    direction: SplitDirection,
+) -> PaneNode<D> {
+    if leaves.len() == 1 {
+        return leaves.pop().expect("one leaf");
+    }
+    let count = leaves.len();
+    let first_count = count.div_ceil(2);
+    let second = leaves.split_off(first_count);
+    let next_direction = match direction {
+        SplitDirection::Horizontal => SplitDirection::Vertical,
+        SplitDirection::Vertical => SplitDirection::Horizontal,
+    };
+    PaneNode::Split {
+        direction,
+        ratio: first_count as f64 / count as f64,
+        first: Box::new(build_tiled_layout(leaves, next_direction)),
+        second: Box::new(build_tiled_layout(second, next_direction)),
     }
 }
 
@@ -906,6 +1223,143 @@ mod tests {
         assert!((outer.1 - 0.6).abs() < 1e-9);
         assert!((inner.1 - 0.3).abs() < 1e-9);
     }
+
+    fn three_pane_layout() -> PaneNode<D> {
+        PaneNode::Split {
+            direction: SplitDirection::Horizontal,
+            ratio: 0.4,
+            first: Box::new(PaneNode::leaf(PaneId::new("a"), D(1))),
+            second: Box::new(PaneNode::Split {
+                direction: SplitDirection::Vertical,
+                ratio: 0.5,
+                first: Box::new(PaneNode::leaf(PaneId::new("b"), D(2))),
+                second: Box::new(PaneNode::leaf(PaneId::new("c"), D(3))),
+            }),
+        }
+    }
+
+    fn stored_ratio(tree: &PaneNode<D>, key: &PaneId) -> f64 {
+        find_ratio(tree, key).unwrap_or(0.5)
+    }
+
+    #[test]
+    fn directional_navigation_follows_rendered_geometry() {
+        let tree = three_pane_layout();
+        assert_eq!(
+            directional_neighbor(&tree, &PaneId::new("a"), PaneDirection::Right, |key| {
+                stored_ratio(&tree, key)
+            }),
+            Some(PaneId::new("b"))
+        );
+        assert_eq!(
+            directional_neighbor(&tree, &PaneId::new("b"), PaneDirection::Down, |key| {
+                stored_ratio(&tree, key)
+            }),
+            Some(PaneId::new("c"))
+        );
+        assert_eq!(
+            directional_neighbor(&tree, &PaneId::new("c"), PaneDirection::Left, |key| {
+                stored_ratio(&tree, key)
+            }),
+            Some(PaneId::new("a"))
+        );
+        assert_eq!(
+            directional_neighbor(&tree, &PaneId::new("a"), PaneDirection::Left, |key| {
+                stored_ratio(&tree, key)
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn swap_moves_whole_leaves_without_changing_topology() {
+        let mut tree = three_pane_layout();
+        let directions_before: Vec<_> = collect_split_keys(&tree)
+            .into_iter()
+            .filter_map(|key| find_split_direction(&tree, &key))
+            .collect();
+        assert!(tree.swap_panes(&PaneId::new("a"), &PaneId::new("c")));
+        assert_eq!(
+            tree.leaf_ids(),
+            vec![PaneId::new("c"), PaneId::new("b"), PaneId::new("a")]
+        );
+        assert!(matches!(
+            tree.find(&PaneId::new("a")),
+            Some(PaneNode::Leaf { data: D(1), .. })
+        ));
+        let directions_after: Vec<_> = collect_split_keys(&tree)
+            .into_iter()
+            .filter_map(|key| find_split_direction(&tree, &key))
+            .collect();
+        assert_eq!(directions_after, directions_before);
+    }
+
+    #[test]
+    fn rotate_preserves_every_leaf_and_layout_slot() {
+        let mut tree = three_pane_layout();
+        assert!(tree.rotate_panes(PaneRotation::Forward));
+        assert_eq!(
+            tree.leaf_ids(),
+            vec![PaneId::new("c"), PaneId::new("a"), PaneId::new("b")]
+        );
+        assert!(tree.rotate_panes(PaneRotation::Backward));
+        assert_eq!(
+            tree.leaf_ids(),
+            vec![PaneId::new("a"), PaneId::new("b"), PaneId::new("c")]
+        );
+    }
+
+    #[test]
+    fn balance_resets_all_ratios() {
+        let mut tree = three_pane_layout();
+        assert_eq!(tree.balance_splits(), 2);
+        let mut ratios = Vec::new();
+        collect_split_ratios(&tree, &mut ratios);
+        assert!(ratios.iter().all(|(_, ratio)| *ratio == 0.5));
+    }
+
+    #[test]
+    fn even_layouts_give_every_pane_equal_space() {
+        for layout in [PaneLayout::EvenHorizontal, PaneLayout::EvenVertical] {
+            let mut tree = three_pane_layout();
+            assert!(tree.apply_layout(layout, None));
+            for id in tree.leaf_ids() {
+                let rect = leaf_rect(&tree, &id, |key| stored_ratio(&tree, key)).unwrap();
+                let dimension = match layout {
+                    PaneLayout::EvenHorizontal => rect.width,
+                    PaneLayout::EvenVertical => rect.height,
+                    _ => unreachable!(),
+                };
+                assert!((dimension - 1.0 / 3.0).abs() < 1e-9);
+            }
+        }
+    }
+
+    #[test]
+    fn main_layout_promotes_the_selected_pane() {
+        let mut tree = three_pane_layout();
+        assert!(tree.apply_layout(PaneLayout::MainVertical, Some(&PaneId::new("c"))));
+        let main = leaf_rect(&tree, &PaneId::new("c"), |key| stored_ratio(&tree, key)).unwrap();
+        assert!((main.width - 0.6).abs() < 1e-9);
+        assert_eq!(main.height, 1.0);
+    }
+
+    #[test]
+    fn resize_boundary_uses_the_nearest_matching_ancestor() {
+        let tree = three_pane_layout();
+        assert_eq!(
+            resize_boundary(&tree, &PaneId::new("b"), PaneDirection::Down),
+            Some((PaneId::new("c"), 1.0))
+        );
+        assert_eq!(
+            resize_boundary(&tree, &PaneId::new("b"), PaneDirection::Left),
+            Some((PaneId::new("b"), -1.0))
+        );
+        assert_eq!(
+            resize_boundary(&tree, &PaneId::new("a"), PaneDirection::Left),
+            None
+        );
+    }
 }
 
 /// An axis-aligned rectangle in unit (0.0..=1.0) coordinates, representing a
@@ -1003,6 +1457,138 @@ pub(crate) fn leaf_rect<D: PaneData>(
         }
     }
     walk(tree, target, Rect::FULL, &mut read_ratio)
+}
+
+/// Find the visually nearest pane in `direction` from `target`.
+///
+/// Candidates that overlap the target on the perpendicular axis are preferred
+/// over diagonal candidates, then ranked by distance. Ratios are supplied by
+/// the caller so navigation follows live drag-resize state rather than a stale
+/// persisted snapshot.
+pub(crate) fn directional_neighbor<D: PaneData>(
+    tree: &PaneNode<D>,
+    target: &PaneId,
+    direction: PaneDirection,
+    mut read_ratio: impl FnMut(&PaneId) -> f64,
+) -> Option<PaneId> {
+    let ids = tree.leaf_ids();
+    let rects: Vec<_> = ids
+        .iter()
+        .filter_map(|id| leaf_rect(tree, id, &mut read_ratio).map(|rect| (id, rect)))
+        .collect();
+    let target_rect = rects
+        .iter()
+        .find(|(id, _)| *id == target)
+        .map(|(_, rect)| *rect)?;
+    let target_x = target_rect.left + target_rect.width / 2.0;
+    let target_y = target_rect.top + target_rect.height / 2.0;
+
+    rects
+        .into_iter()
+        .filter(|(id, _)| *id != target)
+        .filter_map(|(id, rect)| {
+            let x = rect.left + rect.width / 2.0;
+            let y = rect.top + rect.height / 2.0;
+            let eligible = match direction {
+                PaneDirection::Left => x < target_x,
+                PaneDirection::Right => x > target_x,
+                PaneDirection::Up => y < target_y,
+                PaneDirection::Down => y > target_y,
+            };
+            if !eligible {
+                return None;
+            }
+
+            let (orthogonal_overlap, primary_distance, orthogonal_distance) = match direction {
+                PaneDirection::Left | PaneDirection::Right => (
+                    interval_overlap(
+                        target_rect.top,
+                        target_rect.top + target_rect.height,
+                        rect.top,
+                        rect.top + rect.height,
+                    ),
+                    (x - target_x).abs(),
+                    (y - target_y).abs(),
+                ),
+                PaneDirection::Up | PaneDirection::Down => (
+                    interval_overlap(
+                        target_rect.left,
+                        target_rect.left + target_rect.width,
+                        rect.left,
+                        rect.left + rect.width,
+                    ),
+                    (y - target_y).abs(),
+                    (x - target_x).abs(),
+                ),
+            };
+            let diagonal_penalty = usize::from(orthogonal_overlap <= f64::EPSILON);
+            Some((
+                id.clone(),
+                diagonal_penalty,
+                primary_distance,
+                orthogonal_distance,
+            ))
+        })
+        .min_by(|a, b| {
+            a.1.cmp(&b.1)
+                .then_with(|| a.2.total_cmp(&b.2))
+                .then_with(|| a.3.total_cmp(&b.3))
+        })
+        .map(|(id, ..)| id)
+}
+
+fn interval_overlap(a_start: f64, a_end: f64, b_start: f64, b_end: f64) -> f64 {
+    (a_end.min(b_end) - a_start.max(b_start)).max(0.0)
+}
+
+/// Find the nearest ancestor boundary that can grow `target` toward
+/// `direction`. The returned sign is applied to that split's ratio.
+pub(crate) fn resize_boundary<D: PaneData>(
+    tree: &PaneNode<D>,
+    target: &PaneId,
+    direction: PaneDirection,
+) -> Option<(PaneId, f64)> {
+    fn walk<D: PaneData>(
+        node: &PaneNode<D>,
+        target: &PaneId,
+        direction: PaneDirection,
+    ) -> Option<(PaneId, f64)> {
+        let PaneNode::Split {
+            direction: split_direction,
+            first,
+            second,
+            ..
+        } = node
+        else {
+            return None;
+        };
+
+        if first.contains(target) {
+            if let Some(inner) = walk(first, target, direction) {
+                return Some(inner);
+            }
+            let grows_toward_boundary = matches!(
+                (split_direction, direction),
+                (SplitDirection::Horizontal, PaneDirection::Right)
+                    | (SplitDirection::Vertical, PaneDirection::Down)
+            );
+            grows_toward_boundary.then(|| (second.leftmost_leaf_id().clone(), 1.0))
+        } else if second.contains(target) {
+            if let Some(inner) = walk(second, target, direction) {
+                return Some(inner);
+            }
+            let grows_toward_boundary = matches!(
+                (split_direction, direction),
+                (SplitDirection::Horizontal, PaneDirection::Left)
+                    | (SplitDirection::Vertical, PaneDirection::Up)
+            );
+            grows_toward_boundary.then(|| (second.leftmost_leaf_id().clone(), -1.0))
+        } else {
+            None
+        }
+    }
+
+    walk(tree, target, direction)
 }
 
 /// Walk the tree to find the parent rect of the split identified by `split_key`

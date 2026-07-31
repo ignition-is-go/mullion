@@ -193,21 +193,32 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
         .map(|f| data.with_untracked(|d| f(d)))
         .unwrap_or(false);
 
-    // Host-provided per-pane bottom border (e.g. session color). Reactive: the
-    // closure calls the host fn, which reads live signals, so the border tracks
-    // session changes. `box-sizing:border-box` keeps the 2px inside the pane.
+    // The pane axis follows the configured bar edge. Host-provided bottom-border
+    // color (e.g. session color) remains reactive: the closure calls the host
+    // fn, which can read live signals. `box-sizing:border-box` keeps the 2px
+    // inside the pane.
     let id_border = id.clone();
     let border_fn = ctx.pane_border_color.clone();
-    let border_style = move || match border_fn.as_ref().and_then(|f| f(id_border.clone())) {
-        Some(color) => format!("box-sizing:border-box;border-bottom:2px solid {color};"),
-        None => String::new(),
+    let edge = ctx.activity_bar_edge;
+    let pane_style = move || {
+        let direction = if edge.is_horizontal() {
+            "flex-direction:column;"
+        } else {
+            ""
+        };
+        match border_fn.as_ref().and_then(|f| f(id_border.clone())) {
+            Some(color) => {
+                format!("{direction}box-sizing:border-box;border-bottom:2px solid {color};")
+            }
+            None => direction.to_string(),
+        }
     };
 
     view! {
         <div
             class=PaneStyle::SCOPE
             node_ref=pane_ref
-            style=border_style
+            style=pane_style
             on:mouseenter=move |_| { ctx_focus.focused_pane.set(Some(id_focus.clone())); }
         >
             {(!hide_bar).then(|| {

@@ -7,7 +7,7 @@ Named after the vertical bars between window panes in architecture.
 ## Features
 
 - **Splittable panes** -- split horizontally or vertically, resize by dragging, close panes
-- **Activity bar** -- collapsible categories with icons, expands on hover to show labels
+- **Activity bar** -- place it on any pane edge, with collapsible categories and hover labels
 - **Drag and drop** -- move panes between positions by dragging the app icon
 - **Workspaces** -- named layouts you can switch between
 - **Theming** -- all styling via Rust structs passed through `provide_context`, zero CSS required
@@ -119,6 +119,27 @@ provide_context(ActivityBarBehavior {
     hover_expand: false,   // pin the bar at its collapsed width; default: true
 });
 ```
+
+### Activity bar edge
+
+Activity bars are vertical on the left by default. Set the optional edge prop
+on `MullionRoot` or `MullionProvider` to place one on any pane edge:
+
+```rust
+view! {
+    <MullionRoot
+        initial_tree=tree
+        items=items
+        activity_bar_edge=ActivityBarEdge::Top
+        on_event=|_| {}
+    />
+}
+```
+
+`Left` and `Right` arrange items vertically; `Top` and `Bottom` arrange them
+horizontally. On horizontal edges the primary group flows from the left and
+`bottom_items` becomes the trailing group on the right. Hover expansion applies
+to one item at a time, and an auto-hidden bar reveals from its configured edge.
 
 ## Components
 

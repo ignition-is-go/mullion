@@ -8,7 +8,6 @@ use crate::drag::DragPayload;
 use crate::theme::MullionTheme;
 use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
 
-
 /// Colour of the *active* floating activity's icon.
 ///
 /// Floating activities are registered outside any category, so unlike categorised
@@ -26,7 +25,48 @@ const FLOAT_ACTIVE_COLOR: &str = "var(--ab-float-active-color, var(--ml-text))";
 #[derive(css_styled::CssVars)]
 struct ActivityBarInternal {
     #[var("--ab-cat-color")]
+    // Consumed by the CssVars derive's generated builder methods.
+    #[allow(dead_code)]
     pub category_color: String,
+}
+
+/// Edge of each pane on which its activity bar is placed.
+///
+/// [`Left`](Self::Left) is the historic default. Left and right bars arrange
+/// their items vertically; top and bottom bars arrange them horizontally.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ActivityBarEdge {
+    #[default]
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+impl ActivityBarEdge {
+    pub(crate) fn is_horizontal(self) -> bool {
+        matches!(self, Self::Top | Self::Bottom)
+    }
+
+    pub(crate) fn is_trailing(self) -> bool {
+        matches!(self, Self::Right | Self::Bottom)
+    }
+
+    fn axis(self) -> &'static str {
+        if self.is_horizontal() {
+            "horizontal"
+        } else {
+            "vertical"
+        }
+    }
+
+    fn side(self) -> &'static str {
+        if self.is_trailing() {
+            "trailing"
+        } else {
+            "leading"
+        }
+    }
 }
 
 /// Behavior options for the activity bar. Provide via Leptos context before
@@ -37,10 +77,9 @@ struct ActivityBarInternal {
 /// single CSS property.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActivityBarBehavior {
-    /// When `true` (the default), the activity bar widens on hover to reveal
-    /// activity labels. Set to `false` to pin it at its collapsed width —
-    /// useful when labels would overflow surrounding UI, or when the host
-    /// app wants a purely icon-driven bar.
+    /// When `true` (the default), the activity bar reveals activity labels on
+    /// hover. A vertical bar widens as a whole; in a horizontal bar the hovered
+    /// item widens within the row. Set to `false` for a purely icon-driven bar.
     ///
     /// Auto-hiding a bar off the pane edge is a *per-pane* decision, not a
     /// global one — see [`crate::context::PaneAutoHideActivityBar`].
@@ -63,6 +102,9 @@ impl Default for ActivityBarBehavior {
 #[component(theme = MullionTheme)]
 #[component(class(
     panel = "mullion-ab-panel",
+    group = "mullion-ab-group",
+    category = "mullion-ab-category",
+    children = "mullion-ab-children",
     label = "mullion-ab-label",
     icon_slot = "mullion-ab-icon-slot",
     btn = "mullion-ab-btn",
@@ -74,14 +116,17 @@ impl Default for ActivityBarBehavior {
 #[component(internals(ActivityBarInternal))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
+    /// Bar thickness: width on the left/right edges, height on the top/bottom.
     #[prop(var = "--ab-width", default = "28px")]
     pub width: String,
+    /// Expanded width of the vertical panel or one hovered horizontal item.
     #[prop(var = "--ab-expanded-width", default = "150px")]
     pub expanded_width: String,
     #[prop(var = "--ab-icon-size", default = "14px")]
     pub icon_size: String,
     #[prop(var = "--ab-background", default = theme.surface)]
     pub background: String,
+    /// Inner-edge border (right, left, bottom, or top to match placement).
     #[prop(var = "--ab-border", default = "1px solid var(--ml-border)")]
     pub border: String,
     #[prop(var = "--ab-border-radius", default = "0")]
@@ -109,8 +154,9 @@ pub struct ActivityBarStyle {
     /// override with a dark translucent instead.
     #[prop(var = "--ab-cat-card-bg", default = "rgba(255,255,255,0.045)")]
     pub category_card_background: String,
-    /// Hairline at the top of an *open* category's card, marking where the group
-    /// starts. Translucent for the same reason as the card fill.
+    /// Hairline at the leading edge of an *open* category's card (top in a
+    /// vertical bar, left in a horizontal one), marking where the group starts.
+    /// Translucent for the same reason as the card fill.
     #[prop(var = "--ab-cat-edge", default = "rgba(255,255,255,0.08)")]
     pub category_edge: String,
     /// Label colour on category rows. Muted by default, so a category reads as a
@@ -145,6 +191,9 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 width: var(--ab-width);
                 padding-right: 0;
                 transition: width 0.15s ease, padding-right 0.15s ease, transform 0.15s ease;
+            }
+            PANEL::-webkit-scrollbar {
+                display: none;
             }
             /* Hold the bar open for the duration of a drag. Chrome drops
                `:hover` as soon as a native drag starts, so without this the
@@ -269,6 +318,172 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 width: var(--ab-cat-border-width);
                 background: var(--ab-cat-color);
             }
+
+            /* Right and bottom bars come after pane content in the flex layout.
+               A right bar otherwise mirrors the default left-edge geometry. */
+            SCOPE[data-side="trailing"] {
+                order: 1;
+            }
+            SCOPE[data-side="trailing"][data-axis="vertical"] PANEL {
+                left: auto;
+                right: 0;
+                border-right: none;
+                border-left: var(--ab-border);
+                padding-right: 0;
+                padding-left: 0;
+                transition: width 0.15s ease, padding-left 0.15s ease, transform 0.15s ease;
+            }
+            SCOPE[data-side="trailing"][data-axis="vertical"]:not(.COLLAPSED):hover PANEL {
+                padding-right: 0;
+                padding-left: var(--ab-expanded-padding);
+            }
+            SCOPE[data-side="trailing"][data-axis="vertical"] CAT_BORDER {
+                left: auto;
+                right: 0;
+            }
+            SCOPE[data-side="trailing"][data-axis="vertical"] DOT {
+                left: auto;
+                right: 2px;
+            }
+            SCOPE[data-side="trailing"][data-axis="vertical"].AUTO_HIDE::before {
+                left: auto;
+                right: 0;
+            }
+            SCOPE[data-side="trailing"][data-axis="vertical"].AUTO_HIDE PANEL {
+                transform: translateX(100%);
+            }
+            SCOPE[data-side="trailing"][data-axis="vertical"].AUTO_HIDE:hover PANEL {
+                transform: translateX(0);
+            }
+
+            /* Top and bottom bars are horizontal toolbars. The same thickness
+               variable is used on either axis, and the secondary ("bottom")
+               group becomes the trailing group on the right. */
+            SCOPE[data-axis="horizontal"] {
+                width: 100%;
+                height: var(--ab-width);
+            }
+            SCOPE[data-axis="horizontal"] PANEL {
+                left: 0;
+                right: 0;
+                bottom: auto;
+                box-sizing: border-box;
+                width: auto;
+                height: var(--ab-width);
+                flex-direction: row;
+                align-items: stretch;
+                overflow-x: auto;
+                overflow-y: hidden;
+                border-right: none;
+                border-left: none;
+                border-bottom: var(--ab-border);
+                padding-right: 0;
+                padding-left: 0;
+            }
+            SCOPE[data-axis="horizontal"] GROUP {
+                display: flex;
+                flex-direction: row;
+                flex-shrink: 0;
+                height: 100%;
+            }
+            SCOPE[data-axis="horizontal"] GROUP:last-child {
+                margin-left: auto;
+            }
+            SCOPE[data-axis="horizontal"] CATEGORY,
+            SCOPE[data-axis="horizontal"] CHILDREN {
+                display: flex;
+                flex-direction: row;
+                flex-shrink: 0;
+                box-sizing: border-box;
+                height: 100%;
+            }
+            SCOPE[data-axis="horizontal"] BTN {
+                width: var(--ab-width);
+                height: 100%;
+                flex-shrink: 0;
+                transition: width 0.15s ease;
+            }
+            /* The vertical rule expands the whole panel. A horizontal toolbar
+               stays full-width and expands only the item under the pointer, so
+               one long label cannot consume the whole pane. */
+            SCOPE[data-axis="horizontal"]:not(.COLLAPSED):hover PANEL {
+                width: auto;
+                padding-right: 0;
+            }
+            SCOPE[data-axis="horizontal"]:not(.COLLAPSED):hover LABEL {
+                opacity: 0;
+            }
+            SCOPE[data-axis="horizontal"]:not(.COLLAPSED) BTN:hover {
+                width: var(--ab-expanded-width);
+            }
+            SCOPE[data-axis="horizontal"]:not(.COLLAPSED) BTN:hover LABEL {
+                opacity: 1;
+            }
+            SCOPE[data-axis="horizontal"].DRAGGING PANEL {
+                width: auto;
+            }
+            SCOPE[data-axis="horizontal"].DRAGGING BTN {
+                width: var(--ab-expanded-width);
+                transition: none;
+            }
+            SCOPE[data-axis="horizontal"] CAT_BORDER {
+                right: 0;
+                bottom: auto;
+                width: auto;
+                height: var(--ab-cat-border-width);
+            }
+            SCOPE[data-axis="horizontal"] DOT {
+                left: 50%;
+                top: auto;
+                bottom: 2px;
+                transform: translateX(-50%);
+            }
+
+            /* A top bar auto-hides upward. */
+            SCOPE[data-axis="horizontal"].AUTO_HIDE {
+                width: 100%;
+                height: 0;
+            }
+            SCOPE[data-axis="horizontal"].AUTO_HIDE::before {
+                left: 0;
+                right: 0;
+                top: 0;
+                bottom: auto;
+                width: auto;
+                height: 12px;
+            }
+            SCOPE[data-axis="horizontal"].AUTO_HIDE PANEL {
+                transform: translateY(-100%);
+            }
+            SCOPE[data-axis="horizontal"].AUTO_HIDE:hover PANEL {
+                transform: translateY(0);
+            }
+
+            /* Bottom bars mirror the top-edge geometry and auto-hide downward. */
+            SCOPE[data-axis="horizontal"][data-side="trailing"] PANEL {
+                top: auto;
+                bottom: 0;
+                border-bottom: none;
+                border-top: var(--ab-border);
+            }
+            SCOPE[data-axis="horizontal"][data-side="trailing"] CAT_BORDER {
+                top: auto;
+                bottom: 0;
+            }
+            SCOPE[data-axis="horizontal"][data-side="trailing"] DOT {
+                top: 2px;
+                bottom: auto;
+            }
+            SCOPE[data-axis="horizontal"][data-side="trailing"].AUTO_HIDE::before {
+                top: auto;
+                bottom: 0;
+            }
+            SCOPE[data-axis="horizontal"][data-side="trailing"].AUTO_HIDE PANEL {
+                transform: translateY(100%);
+            }
+            SCOPE[data-axis="horizontal"][data-side="trailing"].AUTO_HIDE:hover PANEL {
+                transform: translateY(0);
+            }
         })
     }
 }
@@ -283,12 +498,14 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     data: Signal<D>,
     ctx: MullionContext<D>,
     #[prop(optional)] app_icon: Option<ActivityIcon>,
-    /// When `true`, this pane's bar tucks off the left edge and reveals on
-    /// edge-hover (resolved per-pane by the host). Default: pinned/visible.
+    /// When `true`, this pane's bar tucks off its configured edge and reveals on
+    /// edge-hover. This is resolved per-pane by the host. Default:
+    /// pinned/visible.
     #[prop(default = false)]
     auto_hide: bool,
 ) -> impl IntoView {
     let style = ctx.activity_bar_style.clone();
+    let edge = ctx.activity_bar_edge;
 
     // Which categories are open. A set rather than a single id because the tree
     // nests: opening a child must not close its parent, or the child would
@@ -343,6 +560,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         pane_id: pane_id.clone(),
         expanded,
         active_opacity: style.icon_active_opacity.clone(),
+        edge,
     };
     // Same renderer for the bottom group — nesting, cards and drag all behave
     // identically there; only the anchor differs. Expansion state is shared, so
@@ -352,6 +570,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         pane_id: pane_id.clone(),
         expanded,
         active_opacity: style.icon_active_opacity.clone(),
+        edge,
     };
 
     let ctx_actions = ctx.clone();
@@ -390,10 +609,14 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     };
 
     view! {
-        <div class=scope_class>
-            <div class=ActivityBarStyle::PANEL>
+        <div class=scope_class data-axis=edge.axis() data-side=edge.side()>
+            <div
+                class=ActivityBarStyle::PANEL
+                role="toolbar"
+                aria-orientation=edge.axis()
+            >
                 // App icon + the registered item tree
-                <div>
+                <div class=ActivityBarStyle::GROUP>
                     {app_icon.map(|icon| {
                         let ctx_drag = ctx.clone();
                         let ctx_dragend = ctx.clone();
@@ -426,8 +649,9 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                 </div>
                 // Bottom region, in render order: leading slot, the bottom
                 // activity group, trailing slot, the host's pane accessory, then
-                // the built-in pane actions.
-                <div>
+                // the built-in pane actions. In horizontal mode this is the
+                // trailing group on the right.
+                <div class=ActivityBarStyle::GROUP>
                     {bottom_leading.map(move |f| f(pid_leading.clone()))}
                     {move || {
                         let active = active_activity.get();
@@ -548,6 +772,7 @@ struct BarRender<D: PaneData> {
     pane_id: PaneId,
     expanded: RwSignal<HashSet<CategoryId>>,
     active_opacity: String,
+    edge: ActivityBarEdge,
 }
 
 impl<D: PaneData + Send + Sync> BarRender<D> {
@@ -692,7 +917,11 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         // everything else in the row) as a category opened. A transform has no
         // layout effect, and the fixed-width, centred box below keeps the slot
         // identical in both states.
-        let chevron_rotation = if is_open {
+        let chevron_rotation = if is_open && self.edge.is_horizontal() {
+            // Horizontal children appear to the right, so the open-state arrow
+            // points back toward the category that will absorb them on close.
+            "transform:rotate(180deg);"
+        } else if is_open {
             "transform:rotate(90deg);"
         } else {
             ""
@@ -701,7 +930,7 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         let children_view = if is_open {
             let rendered = self.nodes(children, depth + 1, Some(color), active);
             Some(view! {
-                <div style="position:relative">
+                <div class=ActivityBarStyle::CHILDREN style="position:relative">
                     <div class=ActivityBarStyle::CAT_BORDER
                          style=ActivityBarInternal::vars(|v| v.category_color(&border_color))></div>
                     {rendered}
@@ -722,9 +951,9 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         // lost its base styling and fell back to browser chrome). The values are
         // still themeable through the two custom properties.
         // Geometry is identical open or closed — only colours change. A border
-        // that appears on open would push every row below it down 1px, and a
-        // negative margin that appears on open would shift this row's content
-        // right, so both are always present and merely transparent when closed.
+        // that appears on open would shift following content by 1px, and a
+        // negative margin that appears on open would shift the category itself,
+        // so both are always present and merely transparent when closed.
         //
         // The bleed pulls the card through the panel's right-hand padding so it
         // meets the sidebar edge rather than stopping short. Top level only:
@@ -736,20 +965,30 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         } else {
             "transparent"
         };
-        let edge = if is_open {
+        let card_edge_color = if is_open {
             "var(--ab-cat-edge)"
         } else {
             "transparent"
         };
         let bleed = if depth == 0 {
-            "margin-right:calc(-1 * var(--ab-expanded-padding));"
+            match self.edge {
+                ActivityBarEdge::Left => "margin-right:calc(-1 * var(--ab-expanded-padding));",
+                ActivityBarEdge::Right => "margin-left:calc(-1 * var(--ab-expanded-padding));",
+                ActivityBarEdge::Top | ActivityBarEdge::Bottom => "",
+            }
         } else {
             ""
         };
-        let wrapper_style = format!("background:{fill};border-top:1px solid {edge};{bleed}");
+        let card_edge = if self.edge.is_horizontal() {
+            "border-left"
+        } else {
+            "border-top"
+        };
+        let wrapper_style =
+            format!("background:{fill};{card_edge}:1px solid {card_edge_color};{bleed}");
 
         view! {
-            <div style=wrapper_style>
+            <div class=ActivityBarStyle::CATEGORY style=wrapper_style>
                 <button class=ActivityBarStyle::BTN
                         style=format!("{cat_style};font-weight:600")
                         on:click=move |_| {
@@ -788,6 +1027,9 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
 }
 
 #[cfg(test)]
+// Icon rendering helpers and SVG constants intentionally stay beside the
+// component below these focused tests.
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use css_styled::IntoCss;
@@ -803,12 +1045,16 @@ mod tests {
             // A class selector, not a decimal like `.15s` in `transition` — CSS
             // identifiers cannot begin with a digit.
             let starts_ident = i + 1 < bytes.len()
-                && (bytes[i + 1].is_ascii_alphabetic() || bytes[i + 1] == '_' || bytes[i + 1] == '-');
+                && (bytes[i + 1].is_ascii_alphabetic()
+                    || bytes[i + 1] == '_'
+                    || bytes[i + 1] == '-');
             if bytes[i] == '.' && starts_ident {
                 let start = i + 1;
                 let mut end = start;
                 while end < bytes.len()
-                    && (bytes[end].is_ascii_alphanumeric() || bytes[end] == '-' || bytes[end] == '_')
+                    && (bytes[end].is_ascii_alphanumeric()
+                        || bytes[end] == '-'
+                        || bytes[end] == '_')
                 {
                     end += 1;
                 }
@@ -822,7 +1068,6 @@ mod tests {
         }
         out
     }
-
 
     #[test]
     fn collapsed_modifier_gates_hover_rules() {
@@ -840,7 +1085,6 @@ mod tests {
             "unguarded .mullion-ab:hover rule present in base CSS: {css}"
         );
     }
-
 
     #[test]
     fn category_card_colour_is_translucent() {
@@ -889,6 +1133,9 @@ mod tests {
         // And the classes the render actually attaches must be present.
         for expected in [
             ".mullion-ab-btn",
+            ".mullion-ab-group",
+            ".mullion-ab-category",
+            ".mullion-ab-children",
             ".mullion-ab-label",
             ".mullion-ab-icon-slot",
             ".mullion-ab-dot",
@@ -900,7 +1147,10 @@ mod tests {
             // you that on its own.
             ".mullion-ab-cat-border",
         ] {
-            assert!(css.contains(expected), "missing {expected} in base CSS: {css}");
+            assert!(
+                css.contains(expected),
+                "missing {expected} in base CSS: {css}"
+            );
         }
     }
 
@@ -1016,7 +1266,8 @@ mod tests {
             .nth(1)
             .expect("`.dragging` rule present");
         assert!(
-            dragging_block.contains("transition:none") || dragging_block.contains("transition: none"),
+            dragging_block.contains("transition:none")
+                || dragging_block.contains("transition: none"),
             "expected transition:none in the .dragging rule, got: {dragging_block}"
         );
     }
@@ -1035,6 +1286,61 @@ mod tests {
             ActivityBarStyle::class(&[ActivityBarModifier::Collapsed]),
             "mullion-ab collapsed",
         );
+    }
+
+    #[test]
+    fn edge_css_changes_axis_and_mirrors_auto_hide() {
+        let css = ActivityBarStyle::default().to_css();
+        let compact: String = css.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(
+            compact.contains(r#".mullion-ab[data-axis="horizontal"]"#),
+            "expected horizontal-axis rules in base CSS: {css}"
+        );
+        assert!(
+            compact.contains("border-bottom:var(--ab-border)"),
+            "top bar must move its border to the bottom edge: {css}"
+        );
+        assert!(
+            compact.contains("border-left:var(--ab-border)"),
+            "right bar must move its border to the left edge: {css}"
+        );
+        assert!(
+            compact.contains("border-top:var(--ab-border)"),
+            "bottom bar must move its border to the top edge: {css}"
+        );
+        assert!(
+            compact.contains("translateY(-100%)"),
+            "top auto-hide must leave through the top edge: {css}"
+        );
+        assert!(
+            compact.contains("translateX(100%)"),
+            "right auto-hide must leave through the right edge: {css}"
+        );
+        assert!(
+            compact.contains("translateY(100%)"),
+            "bottom auto-hide must leave through the bottom edge: {css}"
+        );
+        assert!(
+            compact.contains("flex-direction:row"),
+            "horizontal activity groups must render as rows: {css}"
+        );
+    }
+
+    #[test]
+    fn edge_defaults_to_left_and_derives_its_axis() {
+        assert_eq!(ActivityBarEdge::default(), ActivityBarEdge::Left);
+        assert!(!ActivityBarEdge::Left.is_horizontal());
+        assert!(!ActivityBarEdge::Right.is_horizontal());
+        assert!(ActivityBarEdge::Top.is_horizontal());
+        assert!(ActivityBarEdge::Bottom.is_horizontal());
+        assert!(!ActivityBarEdge::Left.is_trailing());
+        assert!(ActivityBarEdge::Right.is_trailing());
+        assert!(!ActivityBarEdge::Top.is_trailing());
+        assert!(ActivityBarEdge::Bottom.is_trailing());
+        assert_eq!(ActivityBarEdge::Left.axis(), "vertical");
+        assert_eq!(ActivityBarEdge::Right.side(), "trailing");
+        assert_eq!(ActivityBarEdge::Top.side(), "leading");
+        assert_eq!(ActivityBarEdge::Bottom.axis(), "horizontal");
     }
 
     #[test]

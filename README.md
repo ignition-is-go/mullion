@@ -1,5 +1,8 @@
 # mullion
 
+[![CI](https://github.com/ignition-is-go/mullion/actions/workflows/ci.yml/badge.svg)](https://github.com/ignition-is-go/mullion/actions/workflows/ci.yml)
+[![Release](https://github.com/ignition-is-go/mullion/actions/workflows/release.yml/badge.svg)](https://github.com/ignition-is-go/mullion/actions/workflows/release.yml)
+
 A [Leptos](https://leptos.dev) component library for splittable panes with activity bars.
 
 Named after the vertical bars between window panes in architecture.
@@ -15,6 +18,15 @@ Named after the vertical bars between window panes in architecture.
 - **Upstream signals** -- update the tree live from server queries
 - **Pane data** -- generic consumer data per pane, filters which activities appear
 - **String IDs** -- all IDs (pane, activity, category) are string-based for stable persistence
+
+## CI and releases
+
+Pull requests and pushes to `main` run library formatting, native and wasm
+checks, Clippy, tests, and a production build of the standalone demo on the
+local Linux runner. After CI succeeds on `main`, cargo-flux derives the next
+version from Conventional Commits, stamps the manifest, and publishes a version
+tag and GitHub Release. Mullion is consumed from Git and is not published to
+crates.io, where the package name is owned by another project.
 
 ## Quick start
 

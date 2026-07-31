@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_FLUX_VERSION: "0.4.4"
+
+jobs:
+  validate:
+    name: native, wasm, and demo
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            examples/demo -> examples/demo/target
+
+      - name: Install cargo-flux
+        run: cargo install cargo-flux --version "$CARGO_FLUX_VERSION" --locked
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check native target
+        run: cargo flux run check
+
+      - name: Check wasm target
+        run: cargo flux run check-wasm
+
+      - name: Lint
+        run: cargo flux run lint
+
+      - name: Test
+        run: cargo flux run test
+
+      - name: Install Trunk
+        run: command -v trunk >/dev/null || cargo install trunk --version 0.21.14 --locked
+
+      - name: Build demo
+        working-directory: examples/demo
+        run: env -u NO_COLOR trunk build --release

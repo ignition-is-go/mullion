@@ -13,7 +13,7 @@ Named after the vertical bars between window panes in architecture.
 - **Drag and drop** -- move panes between positions by dragging the app icon
 - **Focused panes** -- durable focus with configurable hover or click acquisition
 - **Pane commands** -- navigate, split, close, move, swap, resize, rotate, balance, lay out, and zoom panes
-- **Mux keybindings** -- opt-in, customizable `Ctrl+B` prefix map modeled after tmux
+- **Pane keybindings** -- opt-in, customizable `Ctrl+M` map with directional and mnemonic sequences
 - **Command palettes** -- optional `leptos-command-palette` command adapter
 - **Workspaces** -- named layouts you can switch between
 - **Theming** -- all styling via Rust structs passed through `provide_context`, zero CSS required
@@ -203,28 +203,38 @@ main-horizontal, main-vertical, and tiled layouts; and focused-pane zoom.
 Commands return `PaneCommandResult`, so an app can surface cases such as a
 missing neighbor, refused split, or attempt to close the last pane.
 
-### Default mux keymap
+### Default pane keymap
 
 `MullionKeybindings` is opt-in and renders no DOM. Its default
-`MullionKeymap::tmux()` consumes one key after `Ctrl+B`; editable elements are
-ignored. Build a custom map with `MullionKeymap::new`, `bind`, and
-`with_binding`. Focus behavior, commands, chords, bindings, and keymaps all
-implement Serde traits, so applications can store this interaction setup as
-configuration.
+`MullionKeymap::mullion()` starts pane mode with `Ctrl+M`; editable elements are
+ignored. Arrow keys handle the common focus operation immediately. Other
+actions use mnemonic groups followed by a direction or choice, such as `M`,
+arrow to move and `N`, `R` to create a pane on the right. `Escape` cancels a
+partially entered sequence.
 
-| After `Ctrl+B` | Command |
+Build a custom map with `MullionKeymap::new`, `bind`, `bind_sequence`,
+`with_binding`, and `with_sequence`. Focus behavior, commands, chords, bindings,
+and keymaps all implement Serde traits, so applications can store this
+interaction setup as configuration. `MullionKeymap::tmux()` remains available
+as an explicit preset for applications whose users already expect tmux.
+
+| After `Ctrl+M` | Command |
 |---|---|
-| `h/j/k/l` or arrows | Focus left/down/up/right |
-| `1`…`9`, `o`, `;` | Focus by index, next, previous |
-| `%`, `"` | Split left/right, top/bottom |
-| `x`, `z` | Close, toggle zoom |
-| `Shift` + arrows or `H/J/K/L` | Move focused pane |
-| `Alt` + arrows or `h/j/k/l` | Swap with directional neighbor |
-| `Ctrl` + arrows or `h/j/k/l` | Grow toward that boundary |
-| `{`, `}` | Swap with previous/next pane |
-| `Space`, `e` | Toggle parent direction, balance splits |
-| `Ctrl+O`, `Alt+O` | Rotate forward/backward |
-| `Alt+1`…`Alt+5` | Apply the five standard layouts |
+| Arrow | Focus the pane in that direction |
+| `Tab` / `Shift+Tab` | Focus next / previous pane |
+| `Home` / `End` | Focus first / last pane |
+| `F`, then `1`…`9` | Focus a pane by number |
+| `N`, then `R` / `D` | Create a pane to the right / below |
+| `Delete` or `Backspace` | Close the focused pane |
+| `Enter` | Toggle focused-pane zoom |
+| `M`, then arrow | Move the focused pane |
+| `S`, then arrow | Swap with a directional neighbor |
+| `R`, then arrow | Resize toward that boundary |
+| `S`, then `[` / `]` | Swap with previous / next pane |
+| `O`, then `R` / `D` / `T` | Orient side-by-side / stacked / toggle |
+| `B` | Balance every split |
+| `C`, then left / right arrow | Rotate backward / forward |
+| `L`, then `1`…`5` | Apply a standard layout |
 
 ### Command-palette integration
 

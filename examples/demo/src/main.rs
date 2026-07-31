@@ -220,7 +220,7 @@ fn items() -> Vec<ActivityNode<DemoData>> {
                         ActivityNode::activity(ActivityDef {
                             id: ActivityId::new("11"), name: "Keybindings".into(),
                             icon: ActivityIcon::Svg(outlined::ICON_KEYBOARD.into()),
-                            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Keybindings" /> }.into_any(),
+                            filter: |_| true, render: |_pid, _data| view! { <KeybindingsActivity /> }.into_any(),
                             header: None,
                         }),
                         ActivityNode::activity(ActivityDef {
@@ -284,6 +284,40 @@ fn PlaceholderActivity(name: &'static str) -> impl IntoView {
         <div class="activity-content">
             <h2>{name}</h2>
             <p>"This activity is a placeholder."</p>
+        </div>
+    }
+}
+
+#[component]
+fn KeybindingsActivity() -> impl IntoView {
+    let bindings = [
+        ("Arrow", "Focus in that direction"),
+        ("Tab / Shift+Tab", "Focus next / previous"),
+        ("N, R / D", "New pane right / down"),
+        ("M, Arrow", "Move focused pane"),
+        ("S, Arrow", "Swap with a neighbor"),
+        ("R, Arrow", "Resize toward a boundary"),
+        ("Delete", "Close focused pane"),
+        ("Enter", "Toggle focused-pane zoom"),
+        ("B", "Balance splits"),
+        ("L, 1…5", "Apply a standard layout"),
+    ];
+
+    view! {
+        <div class="activity-content">
+            <h2>"Mullion keybindings"</h2>
+            <p style="margin-bottom:12px">
+                "Start each sequence with "
+                <kbd style="padding:2px 6px;border:1px solid var(--ml-highlight);border-radius:4px;background:var(--ml-accent);font-family:monospace">"Ctrl+M"</kbd>
+                ". Press Escape to cancel."
+            </p>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:7px 12px;align-items:center;font-size:12px">
+                {bindings.into_iter().map(|(keys, action)| view! {
+                    <kbd style="padding:2px 6px;border:1px solid var(--ml-highlight);border-radius:4px;background:var(--ml-accent);font-family:monospace;color:var(--ml-text)">{keys}</kbd>
+                    <span style="color:var(--ml-text-muted)">{action}</span>
+                }).collect::<Vec<_>>()}
+            </div>
+            <p style="margin-top:14px">"Use Ctrl/⌘+K to browse every Mullion command."</p>
         </div>
     }
 }
@@ -497,6 +531,9 @@ fn DemoLayout(workspace_mgr: WorkspaceManager<DemoData>) -> impl IntoView {
                         }
                     }).collect::<Vec<_>>()
                 }}
+                <span style="margin-left:auto;padding:2px 6px;color:var(--ml-text-muted);font:11px monospace">
+                    "Ctrl+M · pane commands   Ctrl/⌘+K · palette"
+                </span>
             </div>
         </div>
     }

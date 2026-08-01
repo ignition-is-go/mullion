@@ -669,7 +669,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                         let pid_sv = pane_id.clone();
                         let pid_cl = pane_id.clone();
                         view! {
-                            <button class=ActivityBarStyle::BTN on:click=move |_| {
+                            <button class=ActivityBarStyle::BTN aria-label="Split H" on:click=move |_| {
                                 let d = data.get();
                                 let new_id = PaneId::new(format!("{:.0}", web_sys::js_sys::Math::random() * 1e12));
                                 ctx_sh.split_pane(&pid_sh, SplitDirection::Horizontal, new_id, d);
@@ -677,7 +677,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                 <span class=ActivityBarStyle::ICON_SLOT><span class=ActivityBarStyle::ICON inner_html=ICON_SPLIT_H></span></span>
                                 <span class=ActivityBarStyle::LABEL>"Split H"</span>
                             </button>
-                            <button class=ActivityBarStyle::BTN on:click=move |_| {
+                            <button class=ActivityBarStyle::BTN aria-label="Split V" on:click=move |_| {
                                 let d = data.get();
                                 let new_id = PaneId::new(format!("{:.0}", web_sys::js_sys::Math::random() * 1e12));
                                 ctx_sv.split_pane(&pid_sv, SplitDirection::Vertical, new_id, d);
@@ -685,7 +685,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                 <span class=ActivityBarStyle::ICON_SLOT><span class=ActivityBarStyle::ICON inner_html=ICON_SPLIT_V></span></span>
                                 <span class=ActivityBarStyle::LABEL>"Split V"</span>
                             </button>
-                            <button class=ActivityBarStyle::BTN on:click=move |_| { ctx_cl.close_pane(&pid_cl); }>
+                            <button class=ActivityBarStyle::BTN aria-label="Close" on:click=move |_| { ctx_cl.close_pane(&pid_cl); }>
                                 <span class=ActivityBarStyle::ICON_SLOT><span class=ActivityBarStyle::ICON inner_html=ICON_CLOSE></span></span>
                                 <span class=ActivityBarStyle::LABEL>"Close"</span>
                             </button>
@@ -832,6 +832,7 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         let (pid_click, pid_key) = (self.pane_id.clone(), self.pane_id.clone());
         let (act_click, act_drag, act_key) = (id.clone(), id.clone(), id.clone());
         let label = name.to_string();
+        let aria_label = label.clone();
         let icon_view = render_icon(icon);
 
         // A `div role=button`, not a `<button>`: form controls consume mousedown
@@ -842,6 +843,7 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
             <div class=ActivityBarStyle::BTN
                  role="button"
                  tabindex="0"
+                 aria-label=aria_label
                  style=active_style
                  draggable=can_drag.then_some("true")
                  on:dragstart=move |ev| {
@@ -909,6 +911,7 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
 
         let id_toggle = id.clone();
         let label = name.to_string();
+        let aria_label = label.clone();
         let icon_view = render_icon(icon);
         let dot_color = color.clone();
         let border_color = color.clone();
@@ -990,6 +993,7 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         view! {
             <div class=ActivityBarStyle::CATEGORY style=wrapper_style>
                 <button class=ActivityBarStyle::BTN
+                        aria-label=aria_label
                         style=format!("{cat_style};font-weight:600")
                         on:click=move |_| {
                             expanded.update(|open| {

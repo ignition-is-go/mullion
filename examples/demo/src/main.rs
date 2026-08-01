@@ -1,5 +1,6 @@
 use css_styled::{StyledComponent, StyledComponentBase, css, IntoCss};
 use leptos::prelude::*;
+use leptos_command_palette::{CommandPalette, CommandPaletteProvider};
 use md_icons::outlined;
 use mullion::*;
 use serde::{Deserialize, Serialize};
@@ -219,7 +220,7 @@ fn items() -> Vec<ActivityNode<DemoData>> {
                         ActivityNode::activity(ActivityDef {
                             id: ActivityId::new("11"), name: "Keybindings".into(),
                             icon: ActivityIcon::Svg(outlined::ICON_KEYBOARD.into()),
-                            filter: |_| true, render: |_pid, _data| view! { <PlaceholderActivity name="Keybindings" /> }.into_any(),
+                            filter: |_| true, render: |_pid, _data| view! { <KeybindingsActivity /> }.into_any(),
                             header: None,
                         }),
                         ActivityNode::activity(ActivityDef {
@@ -242,7 +243,7 @@ fn bottom_items() -> Vec<ActivityNode<DemoData>> {
     vec![ActivityNode::activity(ActivityDef {
         id: ActivityId::new("9"), name: "Settings".into(),
         icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
-        filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
+        filter: |d| d.show_settings, render: |pid, _data| view! { <SettingsActivity pane_id=pid /> }.into_any(),
         header: None,
     })]
 }
@@ -288,11 +289,76 @@ fn PlaceholderActivity(name: &'static str) -> impl IntoView {
 }
 
 #[component]
-fn SettingsActivity() -> impl IntoView {
+fn KeybindingsActivity() -> impl IntoView {
+    let bindings = [
+        ("Alt + Arrow", "Focus in that direction"),
+        ("Alt + Shift + Arrow", "Move focused pane"),
+        ("Ctrl + Shift + Arrow", "Swap with a neighbor"),
+        ("Ctrl + Alt + Arrow", "Resize toward a boundary"),
+        ("Ctrl + Alt + Shift + →/↓", "New pane right / down"),
+        ("Ctrl + Shift + Backspace", "Close focused pane"),
+        ("Ctrl + Shift + Enter", "Toggle focused-pane zoom"),
+        ("Ctrl + Alt + =", "Balance splits"),
+        ("Ctrl + Alt + 1…5", "Apply a standard layout"),
+    ];
+
     view! {
         <div class="activity-content">
-            <h2>"Settings"</h2>
-            <p>"Editor preferences and configuration."</p>
+            <h2>"Mullion keybindings"</h2>
+            <p style="margin-bottom:12px">"Direct shortcuts—no leader or pane mode."</p>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:7px 12px;align-items:center;font-size:12px">
+                {bindings.into_iter().map(|(keys, action)| view! {
+                    <kbd style="padding:2px 6px;border:1px solid var(--ml-highlight);border-radius:4px;background:var(--ml-accent);font-family:monospace;color:var(--ml-text)">{keys}</kbd>
+                    <span style="color:var(--ml-text-muted)">{action}</span>
+                }).collect::<Vec<_>>()}
+            </div>
+            <p style="margin-top:14px">"Use Ctrl/⌘+K to browse every Mullion command."</p>
+        </div>
+    }
+}
+
+#[component]
+fn SettingsActivity(pane_id: PaneId) -> impl IntoView {
+    // This is deliberately demo-owned UI. It pulls Mullion's typed descriptor
+    // from context just as a consumer's existing settings page/registry would.
+    let setting = expect_context::<MullionSettings>().focus_behavior_setting();
+    let group_name = format!("{}-{}", setting.id(), pane_id.0);
+    let options = setting
+        .options()
+        .iter()
+        .copied()
+        .map(|option| {
+            let current = setting.clone();
+            let update = setting.clone();
+            let value = *option.value();
+            view! {
+                <label style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--ml-highlight);border-radius:5px;cursor:pointer">
+                    <input
+                        type="radio"
+                        name=group_name.clone()
+                        prop:checked=move || current.get() == value
+                        on:change=move |_| update.set(value)
+                        style="margin-top:2px;accent-color:var(--ml-primary,#00a4ef)"
+                    />
+                    <span>
+                        <strong style="display:block;font-size:13px;color:var(--ml-text)">{option.label()}</strong>
+                        <span style="display:block;margin-top:3px;font-size:12px;line-height:1.4;color:var(--ml-text-muted)">{option.description()}</span>
+                    </span>
+                </label>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    view! {
+        <div class="activity-content">
+            <h2>{setting.label()}</h2>
+            <p>{setting.description()}</p>
+            <div style="display:grid;gap:8px;margin-top:14px;max-width:480px">
+                {options}
+            </div>
+            <p style="margin-top:14px;color:var(--ml-text-muted)">
+                "This control is rendered and persisted by the demo app from Mullion's headless setting descriptor."
+            </p>
         </div>
     }
 }
@@ -302,11 +368,17 @@ fn SettingsActivity() -> impl IntoView {
 fn default_workspace() -> PaneNode<DemoData> {
     PaneNode::Split {
         direction: SplitDirection::Horizontal,
-        ratio: 0.5,
+        ratio: 0.4,
         first: Box::new(PaneNode::leaf_with_activity(PaneId::new("1"), ActivityId::new("1"),
             DemoData { label: "Left".into(), ..Default::default() })),
-        second: Box::new(PaneNode::leaf_with_activity(PaneId::new("2"), ActivityId::new("2"),
-            DemoData { label: "Right".into(), ..Default::default() })),
+        second: Box::new(PaneNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 0.5,
+            first: Box::new(PaneNode::leaf_with_activity(PaneId::new("2"), ActivityId::new("2"),
+                DemoData { label: "Right Top".into(), ..Default::default() })),
+            second: Box::new(PaneNode::leaf_with_activity(PaneId::new("3"), ActivityId::new("3"),
+                DemoData { label: "Right Bottom".into(), ..Default::default() })),
+        }),
     }
 }
 
@@ -340,6 +412,28 @@ fn stacked_workspace() -> PaneNode<DemoData> {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 
+const FOCUS_BEHAVIOR_STORAGE_KEY: &str = "mullion-demo.focus-behavior";
+
+fn load_focus_behavior() -> PaneFocusBehavior {
+    web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+        .and_then(|storage| storage.get_item(FOCUS_BEHAVIOR_STORAGE_KEY).ok().flatten())
+        .and_then(|value| serde_json::from_str(&value).ok())
+        .unwrap_or_default()
+}
+
+fn store_focus_behavior(focus_behavior: PaneFocusBehavior) {
+    let Some(storage) = web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+    else {
+        return;
+    };
+    let Ok(value) = serde_json::to_string(&focus_behavior) else {
+        return;
+    };
+    let _ = storage.set_item(FOCUS_BEHAVIOR_STORAGE_KEY, &value);
+}
+
 #[component]
 fn App() -> impl IntoView {
     let workspaces = vec![
@@ -348,6 +442,15 @@ fn App() -> impl IntoView {
         Workspace { id: WorkspaceId("stacked".into()), name: "Stacked".into(), tree: stacked_workspace() },
     ];
     let workspace_mgr = WorkspaceManager::new(workspaces, WorkspaceId("default".into()));
+
+    // The host owns the setting and its persistence. Mullion receives a
+    // controlled handle, which the demo's existing Settings activity also
+    // consumes to present the live value and setter.
+    let focus_behavior = RwSignal::new(load_focus_behavior());
+    let mullion_settings = MullionSettings::controlled(focus_behavior, move |next| {
+        focus_behavior.set(next);
+        store_focus_behavior(next);
+    });
 
     // Theme defines the color palette
     provide_context(MullionTheme {
@@ -423,19 +526,23 @@ fn App() -> impl IntoView {
     let bottom_trailing = rule("var(--ml-border)");
 
     view! {
-        <style>{demo_css}</style>
-        <MullionProvider
-            initial_tree=default_workspace()
-            items=items()
-            bottom_items=bottom_items()
-            bottom_leading=bottom_leading
-            bottom_trailing=bottom_trailing
-            on_event=on_event
-            app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
-            new_pane=new_pane
-        >
-            <DemoLayout workspace_mgr=workspace_mgr />
-        </MullionProvider>
+        <CommandPaletteProvider>
+            <CommandPalette />
+            <style>{demo_css}</style>
+            <MullionProvider
+                initial_tree=default_workspace()
+                items=items()
+                bottom_items=bottom_items()
+                bottom_leading=bottom_leading
+                bottom_trailing=bottom_trailing
+                on_event=on_event
+                app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
+                new_pane=new_pane
+                settings=mullion_settings
+            >
+                <DemoLayout workspace_mgr=workspace_mgr />
+            </MullionProvider>
+        </CommandPaletteProvider>
     }
 }
 
@@ -446,8 +553,23 @@ fn DemoLayout(workspace_mgr: WorkspaceManager<DemoData>) -> impl IntoView {
 
     let mgr = workspace_mgr.clone();
     let ctx_for_footer = ctx.clone();
+    let commands = MullionCommands::new(ctx.clone()).with_split_factory_fn(
+        |_focused, direction, data| {
+            let id = PaneId::new(format!("mux-{:.0}", web_sys::js_sys::Math::random() * 1e12));
+            let axis = match direction {
+                SplitDirection::Horizontal => "horizontal",
+                SplitDirection::Vertical => "vertical",
+            };
+            Some((id, DemoData {
+                label: format!("{} ({axis} split)", data.label),
+                ..data.clone()
+            }))
+        },
+    );
 
     view! {
+        <MullionKeybindings commands=commands.clone() />
+        <MullionCommandPalette commands=commands />
         <div class=DemoLayoutStyle::SCOPE>
             <div class=DemoLayoutStyle::CONTENT>
                 <MullionPaneTree ctx=ctx />
@@ -477,6 +599,9 @@ fn DemoLayout(workspace_mgr: WorkspaceManager<DemoData>) -> impl IntoView {
                         }
                     }).collect::<Vec<_>>()
                 }}
+                <span style="margin-left:auto;padding:2px 6px;color:var(--ml-text-muted);font:11px monospace">
+                    "Alt+Arrow · focus   Ctrl/⌘+K · all commands"
+                </span>
             </div>
         </div>
     }

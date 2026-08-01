@@ -1,13 +1,23 @@
 pub mod activity;
+pub mod commands;
 pub mod components;
 pub mod context;
 pub mod drag;
 pub mod events;
+pub mod focus;
+pub mod keybindings;
+pub mod settings;
 pub mod theme;
 pub mod tree;
 pub mod workspace;
 
+#[cfg(feature = "command-palette")]
+pub mod command_palette;
+
 pub use activity::{ActivityDef, ActivityIcon, ActivityNode, ActivityRender, Category};
+pub use commands::{
+    MullionCommands, PaneCommand, PaneCommandError, PaneCommandResult, PaneSplitFactory,
+};
 pub use components::activity_bar::{
     ActivityBarBehavior, ActivityBarEdge, ActivityBarModifier, ActivityBarStyle,
 };
@@ -27,6 +37,15 @@ pub use context::{
 };
 pub use drag::DragPayload;
 pub use events::PaneEvent;
+pub use focus::PaneFocusBehavior;
+pub use keybindings::{KeyChord, KeyStroke, MullionKeyBinding, MullionKeybindings, MullionKeymap};
+pub use settings::{MullionSetting, MullionSettingOption, MullionSettings};
 pub use theme::MullionTheme;
-pub use tree::{ActivityId, CategoryId, DropEdge, PaneData, PaneId, PaneNode, SplitDirection};
+pub use tree::{
+    ActivityId, CategoryId, DropEdge, PaneData, PaneDirection, PaneId, PaneLayout, PaneNode,
+    PaneRotation, SplitDirection,
+};
 pub use workspace::{Workspace, WorkspaceId, WorkspaceManager};
+
+#[cfg(feature = "command-palette")]
+pub use command_palette::{mullion_palette_commands, MullionCommandPalette};

@@ -8,7 +8,8 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-mullion = { path = "../.." }
+mullion = { path = "../..", features = ["command-palette"] }
+leptos-command-palette = { git = "https://github.com/ignition-is-go/leptos-command-palette.git", rev = "42350c771de43b4df54a13f63394c6e28ec4272e", version = "0.1.0" }
 css-styled = { git = "https://github.com/ignition-is-go/css-styled.git", version = "0.1.0" }
 leptos = { version = "0.8.17", features = ["csr"] }
 serde = { version = "1", features = ["derive"] }

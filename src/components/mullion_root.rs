@@ -5,6 +5,7 @@ use css_styled::{IntoCss, IntoThemeCss};
 use crate::activity::ActivityNode;
 use crate::context::{MullionContext, PaneAccessory, PaneBorderColor};
 use crate::events::PaneEvent;
+use crate::settings::MullionSettings;
 use crate::theme::MullionTheme;
 use crate::tree::{PaneData, PaneNode};
 
@@ -87,6 +88,10 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// top and bottom arrange items horizontally.
     #[prop(optional)]
     activity_bar_edge: ActivityBarEdge,
+    /// Reactive preferences shared with the host's settings UI/store. Defaults
+    /// to a local handle with click-to-focus enabled.
+    #[prop(optional)]
+    settings: MullionSettings,
     /// Optional predicate: panes for which it returns `true` hide their activity
     /// bar (getting hover controls instead). Default: every pane keeps its bar.
     #[prop(optional)]
@@ -149,7 +154,8 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         bottom_leading,
         bottom_trailing,
     )
-    .with_activity_bar_edge(activity_bar_edge);
+    .with_activity_bar_edge(activity_bar_edge)
+    .with_settings(settings.clone());
 
     if let Some(upstream_sig) = upstream {
         let ctx_clone = ctx.clone();
@@ -160,6 +166,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         });
     }
 
+    provide_context(settings);
     provide_context(ctx);
 
     view! {
@@ -213,6 +220,10 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// top and bottom arrange items horizontally.
     #[prop(optional)]
     activity_bar_edge: ActivityBarEdge,
+    /// Reactive preferences shared with the host's settings UI/store. Defaults
+    /// to a local handle with click-to-focus enabled.
+    #[prop(optional)]
+    settings: MullionSettings,
     /// Optional predicate: panes for which it returns `true` hide their activity
     /// bar (getting hover controls instead). Default: every pane keeps its bar.
     #[prop(optional)]
@@ -274,7 +285,8 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         bottom_leading,
         bottom_trailing,
     )
-    .with_activity_bar_edge(activity_bar_edge);
+    .with_activity_bar_edge(activity_bar_edge)
+    .with_settings(settings.clone());
 
     if let Some(upstream_sig) = upstream {
         let ctx_clone = ctx.clone();
@@ -285,6 +297,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         });
     }
 
+    provide_context(settings);
     provide_context(ctx.clone());
 
     view! {

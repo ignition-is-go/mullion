@@ -162,7 +162,10 @@ The first pane starts focused. Focus is durable state in `ctx.focused_pane`, is
 marked by a high-contrast accent on the internal separators surrounding that
 pane, and drives every focus-relative command. Root-container edges are omitted,
 so the marker traces only the boundaries that distinguish the focused pane from
-its neighbors. Choose how pointer interaction changes focus:
+its neighbors. A pinned activity bar gets its own visual lane: the focus frame
+is inset to the bar's content edge and painted below the bar, so category and
+active-activity colors never compete with pane focus. Choose how pointer
+interaction changes focus:
 
 ```rust
 view! {

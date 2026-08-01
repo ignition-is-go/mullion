@@ -37,7 +37,7 @@ impl css_styled::StyledComponentBase for PaneStyle {
     }
 }
 
-use super::activity_bar::ActivityBar;
+use super::activity_bar::{ActivityBar, ActivityBarEdge};
 use super::drop_overlay::DropOverlay;
 use super::pane_content::PaneContent;
 use super::split_handle::{SplitHandleModifier, SplitHandleStyle};
@@ -231,6 +231,8 @@ fn LeafView<D: PaneData + Send + Sync>(
     let id_border = id.clone();
     let border_fn = ctx.pane_border_color.clone();
     let edge = ctx.activity_bar_edge;
+    let focus_bar_edge = (!hide_bar && !auto_hide_bar).then_some(edge);
+    let focus_bar_width = ctx.activity_bar_style.width.clone();
     let pane_style = move || {
         let direction = if edge.is_horizontal() {
             "flex-direction:column;"
@@ -253,7 +255,7 @@ fn LeafView<D: PaneData + Send + Sync>(
         } else {
             rect.get()
         };
-        focus_frame_css(focused, rendered_rect)
+        focus_frame_css(focused, rendered_rect, focus_bar_edge, &focus_bar_width)
     };
 
     view! {
@@ -319,7 +321,12 @@ fn focus_edges(rect: Rect) -> FocusEdges {
     }
 }
 
-fn focus_frame_css(focused: bool, rect: Rect) -> String {
+fn focus_frame_css(
+    focused: bool,
+    rect: Rect,
+    activity_bar_edge: Option<ActivityBarEdge>,
+    activity_bar_width: &str,
+) -> String {
     let edges = focus_edges(rect);
     let width = |visible| {
         if visible {
@@ -329,8 +336,16 @@ fn focus_frame_css(focused: bool, rect: Rect) -> String {
         }
     };
     let opacity = if focused { "1" } else { "0" };
+    let (top, right, bottom, left) = match activity_bar_edge {
+        Some(ActivityBarEdge::Left) => ("0", "0", "0", activity_bar_width),
+        Some(ActivityBarEdge::Right) => ("0", activity_bar_width, "0", "0"),
+        Some(ActivityBarEdge::Top) => (activity_bar_width, "0", "0", "0"),
+        Some(ActivityBarEdge::Bottom) => ("0", "0", activity_bar_width, "0"),
+        None => ("0", "0", "0", "0"),
+    };
     format!(
-        "position:absolute;inset:0;z-index:15;pointer-events:none;box-sizing:border-box;\
+        "position:absolute;top:{top};right:{right};bottom:{bottom};left:{left};z-index:6;\
+         pointer-events:none;box-sizing:border-box;\
          border-style:solid;border-color:var(--ml-focus-color,var(--ml-primary,#00a4ef));\
          border-width:{} {} {} {};opacity:{opacity};transition:opacity 100ms ease-out;",
         width(edges.top),
@@ -405,10 +420,28 @@ mod focus_tests {
                 width: 0.5,
                 height: 1.0,
             },
+            None,
+            "28px",
         );
         assert!(css.contains("var(--ml-focus-color,var(--ml-primary,#00a4ef))"));
         assert!(css.contains("0 var(--ml-focus-width, 2px) 0 0"));
         assert!(css.contains("opacity:1"));
+    }
+
+    #[test]
+    fn focus_frame_yields_to_a_pinned_activity_bar() {
+        let rect = Rect {
+            left: 0.4,
+            top: 0.0,
+            width: 0.6,
+            height: 0.5,
+        };
+
+        let left = focus_frame_css(true, rect, Some(ActivityBarEdge::Left), "32px");
+        assert!(left.contains("top:0;right:0;bottom:0;left:32px;z-index:6"));
+
+        let top = focus_frame_css(true, rect, Some(ActivityBarEdge::Top), "30px");
+        assert!(top.contains("top:30px;right:0;bottom:0;left:0;z-index:6"));
     }
 }
 

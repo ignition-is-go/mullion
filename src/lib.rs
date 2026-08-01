@@ -6,6 +6,7 @@ pub mod drag;
 pub mod events;
 pub mod focus;
 pub mod keybindings;
+pub mod settings;
 pub mod theme;
 pub mod tree;
 pub mod workspace;
@@ -38,6 +39,7 @@ pub use drag::DragPayload;
 pub use events::PaneEvent;
 pub use focus::PaneFocusBehavior;
 pub use keybindings::{KeyChord, KeyStroke, MullionKeyBinding, MullionKeybindings, MullionKeymap};
+pub use settings::{MullionSetting, MullionSettingOption, MullionSettings};
 pub use theme::MullionTheme;
 pub use tree::{
     ActivityId, CategoryId, DropEdge, PaneData, PaneDirection, PaneId, PaneLayout, PaneNode,

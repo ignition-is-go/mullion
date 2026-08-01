@@ -200,7 +200,8 @@ fn LeafView<D: PaneData + Send + Sync>(
     let id_drop = id.clone();
     let id_hover = id.clone();
     let ctx_hover = ctx.clone();
-    let focus_behavior = ctx.focus_behavior;
+    let focus_behavior_hover = ctx.settings.focus_behavior_setting();
+    let focus_behavior_click = focus_behavior_hover.clone();
     let focused_pane_attr = ctx.focused_pane;
     let id_focused_attr = id.clone();
     let focused_pane_frame = ctx.focused_pane;
@@ -271,12 +272,12 @@ fn LeafView<D: PaneData + Send + Sync>(
             node_ref=pane_ref
             style=pane_style
             on:mouseenter=move |_| {
-                if focus_behavior == PaneFocusBehavior::Hover {
+                if focus_behavior_hover.get_untracked() == PaneFocusBehavior::Hover {
                     ctx_focus.focus_pane(&id_focus);
                 }
             }
             on:mousedown=move |_| {
-                if focus_behavior == PaneFocusBehavior::Click {
+                if focus_behavior_click.get_untracked() == PaneFocusBehavior::Click {
                     ctx_click_focus.focus_pane(&id_click_focus);
                 }
             }

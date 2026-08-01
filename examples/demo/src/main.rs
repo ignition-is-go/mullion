@@ -243,7 +243,7 @@ fn bottom_items() -> Vec<ActivityNode<DemoData>> {
     vec![ActivityNode::activity(ActivityDef {
         id: ActivityId::new("9"), name: "Settings".into(),
         icon: ActivityIcon::Svg(outlined::ICON_SETTINGS.into()),
-        filter: |d| d.show_settings, render: |_pid, _data| view! { <SettingsActivity /> }.into_any(),
+        filter: |d| d.show_settings, render: |pid, _data| view! { <SettingsActivity pane_id=pid /> }.into_any(),
         header: None,
     })]
 }
@@ -318,11 +318,47 @@ fn KeybindingsActivity() -> impl IntoView {
 }
 
 #[component]
-fn SettingsActivity() -> impl IntoView {
+fn SettingsActivity(pane_id: PaneId) -> impl IntoView {
+    // This is deliberately demo-owned UI. It pulls Mullion's typed descriptor
+    // from context just as a consumer's existing settings page/registry would.
+    let setting = expect_context::<MullionSettings>().focus_behavior_setting();
+    let group_name = format!("{}-{}", setting.id(), pane_id.0);
+    let options = setting
+        .options()
+        .iter()
+        .copied()
+        .map(|option| {
+            let current = setting.clone();
+            let update = setting.clone();
+            let value = *option.value();
+            view! {
+                <label style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--ml-highlight);border-radius:5px;cursor:pointer">
+                    <input
+                        type="radio"
+                        name=group_name.clone()
+                        prop:checked=move || current.get() == value
+                        on:change=move |_| update.set(value)
+                        style="margin-top:2px;accent-color:var(--ml-primary,#00a4ef)"
+                    />
+                    <span>
+                        <strong style="display:block;font-size:13px;color:var(--ml-text)">{option.label()}</strong>
+                        <span style="display:block;margin-top:3px;font-size:12px;line-height:1.4;color:var(--ml-text-muted)">{option.description()}</span>
+                    </span>
+                </label>
+            }
+        })
+        .collect::<Vec<_>>();
+
     view! {
         <div class="activity-content">
-            <h2>"Settings"</h2>
-            <p>"Editor preferences and configuration."</p>
+            <h2>{setting.label()}</h2>
+            <p>{setting.description()}</p>
+            <div style="display:grid;gap:8px;margin-top:14px;max-width:480px">
+                {options}
+            </div>
+            <p style="margin-top:14px;color:var(--ml-text-muted)">
+                "This control is rendered and persisted by the demo app from Mullion's headless setting descriptor."
+            </p>
         </div>
     }
 }
@@ -376,6 +412,28 @@ fn stacked_workspace() -> PaneNode<DemoData> {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 
+const FOCUS_BEHAVIOR_STORAGE_KEY: &str = "mullion-demo.focus-behavior";
+
+fn load_focus_behavior() -> PaneFocusBehavior {
+    web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+        .and_then(|storage| storage.get_item(FOCUS_BEHAVIOR_STORAGE_KEY).ok().flatten())
+        .and_then(|value| serde_json::from_str(&value).ok())
+        .unwrap_or_default()
+}
+
+fn store_focus_behavior(focus_behavior: PaneFocusBehavior) {
+    let Some(storage) = web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+    else {
+        return;
+    };
+    let Ok(value) = serde_json::to_string(&focus_behavior) else {
+        return;
+    };
+    let _ = storage.set_item(FOCUS_BEHAVIOR_STORAGE_KEY, &value);
+}
+
 #[component]
 fn App() -> impl IntoView {
     let workspaces = vec![
@@ -384,6 +442,15 @@ fn App() -> impl IntoView {
         Workspace { id: WorkspaceId("stacked".into()), name: "Stacked".into(), tree: stacked_workspace() },
     ];
     let workspace_mgr = WorkspaceManager::new(workspaces, WorkspaceId("default".into()));
+
+    // The host owns the setting and its persistence. Mullion receives a
+    // controlled handle, which the demo's existing Settings activity also
+    // consumes to present the live value and setter.
+    let focus_behavior = RwSignal::new(load_focus_behavior());
+    let mullion_settings = MullionSettings::controlled(focus_behavior, move |next| {
+        focus_behavior.set(next);
+        store_focus_behavior(next);
+    });
 
     // Theme defines the color palette
     provide_context(MullionTheme {
@@ -471,7 +538,7 @@ fn App() -> impl IntoView {
                 on_event=on_event
                 app_icon=ActivityIcon::Svg(outlined::ICON_APPS.into())
                 new_pane=new_pane
-                focus_behavior=PaneFocusBehavior::Click
+                settings=mullion_settings
             >
                 <DemoLayout workspace_mgr=workspace_mgr />
             </MullionProvider>

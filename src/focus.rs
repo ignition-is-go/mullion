@@ -10,9 +10,9 @@ pub enum PaneFocusBehavior {
     ///
     /// This preserves Mullion's behavior before focus became a first-class
     /// interaction model.
-    #[default]
     Hover,
     /// Focus changes when the user presses the mouse inside a pane and remains
     /// there until another pane is clicked or focused programmatically.
+    #[default]
     Click,
 }

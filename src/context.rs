@@ -13,7 +13,7 @@ use crate::components::pane_view::PaneStyle;
 use crate::components::split_handle::SplitHandleStyle;
 use crate::drag::DragPayload;
 use crate::events::PaneEvent;
-use crate::focus::PaneFocusBehavior;
+use crate::settings::MullionSettings;
 use crate::theme::MullionTheme;
 use crate::tree::{
     collect_split_ratios, directional_neighbor, find_ratio, resize_boundary, ActivityId,
@@ -117,12 +117,12 @@ pub struct MullionContext<D: PaneData> {
     event_tx: StoredValue<Box<dyn Fn(PaneEvent<D>) + Send + Sync>>,
     /// The pane that receives focus-relative commands.
     ///
-    /// Pointer interaction updates this according to [`Self::focus_behavior`];
+    /// Pointer interaction updates this according to [`Self::settings`];
     /// applications may also read or set it directly, or use
     /// [`Self::focus_pane`].
     pub focused_pane: RwSignal<Option<PaneId>>,
-    /// Whether hovering or clicking acquires pane focus.
-    pub focus_behavior: PaneFocusBehavior,
+    /// Live preferences shared with the host application's settings UI.
+    pub settings: MullionSettings,
     /// The pane temporarily occupying the full Mullion viewport.
     ///
     /// This is presentation state: toggling zoom does not rewrite or emit a
@@ -226,7 +226,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             categories: StoredValue::new(cat_metas),
             event_tx: StoredValue::new(Box::new(event_handler)),
             focused_pane: RwSignal::new(initial_focus),
-            focus_behavior: PaneFocusBehavior::default(),
+            settings: MullionSettings::default(),
             zoomed_pane: RwSignal::new(None),
             drag: RwSignal::new(None),
             theme,
@@ -261,9 +261,9 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         self
     }
 
-    /// Configure how pointer interaction acquires pane focus.
-    pub fn with_focus_behavior(mut self, behavior: PaneFocusBehavior) -> Self {
-        self.focus_behavior = behavior;
+    /// Bind the context to host-controlled Mullion preferences.
+    pub fn with_settings(mut self, settings: MullionSettings) -> Self {
+        self.settings = settings;
         self
     }
 

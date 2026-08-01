@@ -168,11 +168,20 @@ active-activity colors never compete with pane focus. Choose how pointer
 interaction changes focus:
 
 ```rust
+let app_focus_behavior = RwSignal::new(load_focus_behavior());
+let mullion_settings = MullionSettings::controlled(
+    app_focus_behavior,
+    move |next| {
+        app_focus_behavior.set(next);
+        save_focus_behavior(next); // optional host persistence
+    },
+);
+
 view! {
     <MullionProvider
         initial_tree=tree
         items=items
-        focus_behavior=PaneFocusBehavior::Click // default: Hover
+        settings=mullion_settings
         on_event=|_| {}
     >
         <AppLayout />
@@ -180,12 +189,46 @@ view! {
 }
 ```
 
-`Hover` preserves Mullion's historical focus-follows-pointer behavior. `Click`
-keeps focus on the last pane pressed. Programmatic focus works in either mode.
+`Click` is the default and keeps focus on the last pane pressed. `Hover` is an
+opt-in focus-follows-pointer mode. Programmatic focus works in either mode.
 Set `--ml-focus-color` and `--ml-focus-width` on any Mullion ancestor to theme
 the indicator. The color falls back to `--ml-primary`, then `#00a4ef`; width
 defaults to `2px`. These standalone variables avoid adding fields to the public
 `MullionTheme` struct.
+
+### Settings integration
+
+`MullionSettings` is a headless, controlled handle—not a settings page and not
+a persistence layer. The consuming application keeps its own source of truth
+and passes its live signal plus setter to `MullionSettings::controlled`. The
+same handle can then be cloned into the app's existing settings page or generic
+settings registry:
+
+```rust
+let pane_focus = mullion_settings.focus_behavior_setting();
+
+settings_registry.register_select(
+    pane_focus.id(),
+    pane_focus.label(),
+    pane_focus.description(),
+    pane_focus.options(),
+    pane_focus.value_signal(),
+    move |next| pane_focus.set(next),
+);
+```
+
+The registry call above is schematic—the registry belongs to the host—but every
+piece it needs is supplied by `MullionSetting<PaneFocusBehavior>`: the stable id
+`mullion.focus_behavior`, label, description, typed options, reactive value, and
+setter. `MullionProvider` also provides its `MullionSettings` handle through
+Leptos context, which is convenient for an app-owned settings activity rendered
+inside Mullion.
+
+For applications without a settings system, use
+`MullionSettings::local(PaneFocusBehavior::Click)` or simply omit the `settings`
+prop to get a local click-to-focus default. The runtime handle itself is not
+serialized; persist the serializable `PaneFocusBehavior` in the application's
+existing configuration model.
 
 `MullionCommands<D>` is the dependency-free command dispatcher. Split commands
 require a host factory because Mullion cannot invent application ids or data:

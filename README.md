@@ -159,8 +159,10 @@ to one item at a time, and an auto-hidden bar reveals from its configured edge.
 ## Focus and pane commands
 
 The first pane starts focused. Focus is durable state in `ctx.focused_pane`, is
-visually marked with the theme's `--ml-highlight` color, and drives every
-focus-relative command. Choose how pointer interaction changes it:
+marked by a high-contrast accent on the internal separators surrounding that
+pane, and drives every focus-relative command. Root-container edges are omitted,
+so the marker traces only the boundaries that distinguish the focused pane from
+its neighbors. Choose how pointer interaction changes focus:
 
 ```rust
 view! {
@@ -177,6 +179,10 @@ view! {
 
 `Hover` preserves Mullion's historical focus-follows-pointer behavior. `Click`
 keeps focus on the last pane pressed. Programmatic focus works in either mode.
+Set `--ml-focus-color` and `--ml-focus-width` on any Mullion ancestor to theme
+the indicator. The color falls back to `--ml-primary`, then `#00a4ef`; width
+defaults to `2px`. These standalone variables avoid adding fields to the public
+`MullionTheme` struct.
 
 `MullionCommands<D>` is the dependency-free command dispatcher. Split commands
 require a host factory because Mullion cannot invent application ids or data:

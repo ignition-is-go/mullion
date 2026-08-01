@@ -28,6 +28,7 @@ impl css_styled::StyledComponentBase for PaneStyle {
             SCOPE {
                 display: flex;
                 flex-direction: row;
+                position: relative;
                 width: 100%;
                 height: 100%;
                 overflow: hidden;
@@ -138,13 +139,17 @@ fn LeafSlot<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
 
     view! {
         <div style=slot_style>
-            <LeafView id=id ctx=ctx />
+            <LeafView id=id ctx=ctx rect=rect />
         </div>
     }
 }
 
 #[component]
-fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> impl IntoView {
+fn LeafView<D: PaneData + Send + Sync>(
+    id: PaneId,
+    ctx: MullionContext<D>,
+    rect: Memo<Rect>,
+) -> impl IntoView {
     // Per-leaf reactive slices of the tree. Each Memo fires only when the
     // specific leaf's field changes (PartialEq dedup).
     //
@@ -196,9 +201,12 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
     let id_hover = id.clone();
     let ctx_hover = ctx.clone();
     let focus_behavior = ctx.focus_behavior;
-    let focused_pane = ctx.focused_pane;
     let focused_pane_attr = ctx.focused_pane;
     let id_focused_attr = id.clone();
+    let focused_pane_frame = ctx.focused_pane;
+    let zoomed_pane_frame = ctx.zoomed_pane;
+    let id_focus_frame = id.clone();
+    let id_zoom_frame = id.clone();
 
     // Does this pane hide its activity bar? (Role is stable for a pane's lifetime,
     // so evaluate the host predicate once, untracked.)
@@ -221,17 +229,11 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
     // fn, which can read live signals. `box-sizing:border-box` keeps the 2px
     // inside the pane.
     let id_border = id.clone();
-    let id_focused_style = id.clone();
     let border_fn = ctx.pane_border_color.clone();
     let edge = ctx.activity_bar_edge;
     let pane_style = move || {
         let direction = if edge.is_horizontal() {
             "flex-direction:column;"
-        } else {
-            ""
-        };
-        let focus_ring = if focused_pane.get().as_ref() == Some(&id_focused_style) {
-            "box-shadow:inset 0 0 0 1px var(--ml-highlight);"
         } else {
             ""
         };
@@ -241,7 +243,17 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
             }
             None => String::new(),
         };
-        format!("{direction}{focus_ring}{border}")
+        format!("{direction}{border}")
+    };
+
+    let focus_frame_style = move || {
+        let focused = focused_pane_frame.get().as_ref() == Some(&id_focus_frame);
+        let rendered_rect = if zoomed_pane_frame.get().as_ref() == Some(&id_zoom_frame) {
+            Rect::FULL
+        } else {
+            rect.get()
+        };
+        focus_frame_css(focused, rendered_rect)
     };
 
     view! {
@@ -280,7 +292,123 @@ fn LeafView<D: PaneData + Send + Sync>(id: PaneId, ctx: MullionContext<D>) -> im
                 <DropOverlay pane_id=id_drop ctx=ctx />
                 {hide_bar.then(|| view! { <PaneHoverControls pane_id=id_hover data=data ctx=ctx_hover /> })}
             </div>
+            <div
+                data-mullion-focus-frame=""
+                aria-hidden="true"
+                style=focus_frame_style
+            />
         </div>
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct FocusEdges {
+    top: bool,
+    right: bool,
+    bottom: bool,
+    left: bool,
+}
+
+fn focus_edges(rect: Rect) -> FocusEdges {
+    const ROOT_EDGE_EPSILON: f64 = 1e-7;
+    FocusEdges {
+        top: rect.top > ROOT_EDGE_EPSILON,
+        right: rect.left + rect.width < 1.0 - ROOT_EDGE_EPSILON,
+        bottom: rect.top + rect.height < 1.0 - ROOT_EDGE_EPSILON,
+        left: rect.left > ROOT_EDGE_EPSILON,
+    }
+}
+
+fn focus_frame_css(focused: bool, rect: Rect) -> String {
+    let edges = focus_edges(rect);
+    let width = |visible| {
+        if visible {
+            "var(--ml-focus-width, 2px)"
+        } else {
+            "0"
+        }
+    };
+    let opacity = if focused { "1" } else { "0" };
+    format!(
+        "position:absolute;inset:0;z-index:15;pointer-events:none;box-sizing:border-box;\
+         border-style:solid;border-color:var(--ml-focus-color,var(--ml-primary,#00a4ef));\
+         border-width:{} {} {} {};opacity:{opacity};transition:opacity 100ms ease-out;",
+        width(edges.top),
+        width(edges.right),
+        width(edges.bottom),
+        width(edges.left),
+    )
+}
+
+#[cfg(test)]
+mod focus_tests {
+    use super::*;
+
+    #[test]
+    fn full_size_pane_has_no_internal_focus_edges() {
+        assert_eq!(focus_edges(Rect::FULL), FocusEdges::default());
+    }
+
+    #[test]
+    fn main_and_stack_layout_highlights_only_shared_edges() {
+        let left = Rect {
+            left: 0.0,
+            top: 0.0,
+            width: 0.4,
+            height: 1.0,
+        };
+        let top_right = Rect {
+            left: 0.4,
+            top: 0.0,
+            width: 0.6,
+            height: 0.5,
+        };
+        let bottom_right = Rect {
+            left: 0.4,
+            top: 0.5,
+            width: 0.6,
+            height: 0.5,
+        };
+
+        assert_eq!(
+            focus_edges(left),
+            FocusEdges {
+                right: true,
+                ..FocusEdges::default()
+            }
+        );
+        assert_eq!(
+            focus_edges(top_right),
+            FocusEdges {
+                left: true,
+                bottom: true,
+                ..FocusEdges::default()
+            }
+        );
+        assert_eq!(
+            focus_edges(bottom_right),
+            FocusEdges {
+                left: true,
+                top: true,
+                ..FocusEdges::default()
+            }
+        );
+    }
+
+    #[test]
+    fn focus_frame_uses_dedicated_theme_variables() {
+        let css = focus_frame_css(
+            true,
+            Rect {
+                left: 0.0,
+                top: 0.0,
+                width: 0.5,
+                height: 1.0,
+            },
+        );
+        assert!(css.contains("var(--ml-focus-color,var(--ml-primary,#00a4ef))"));
+        assert!(css.contains("0 var(--ml-focus-width, 2px) 0 0"));
+        assert!(css.contains("opacity:1"));
     }
 }
 

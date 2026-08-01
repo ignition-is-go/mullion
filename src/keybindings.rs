@@ -123,7 +123,7 @@ fn normalize_key(key: &str) -> String {
     }
 }
 
-/// One command sequence after a keymap prefix.
+/// One command sequence after a keymap's optional prefix.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MullionKeyBinding {
     pub sequence: Vec<KeyChord>,
@@ -143,15 +143,14 @@ impl MullionKeyBinding {
     }
 }
 
-/// Prefix-based pane keymap.
+/// Pane keymap with an optional prefix.
 ///
-/// Bindings may contain more than one chord after the prefix. This lets the
-/// default map group operations mnemonically — for example, `Ctrl+M`, `M`,
-/// `ArrowLeft` means "move the pane left" — without consuming common browser
-/// or application shortcuts globally.
+/// Direct maps resolve bindings immediately. Prefixed maps may contain more
+/// than one chord after their prefix, which supports terminal-muxer-style and
+/// application-specific command modes without constraining Mullion's default.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MullionKeymap {
-    prefix: KeyChord,
+    prefix: Option<KeyChord>,
     bindings: Vec<MullionKeyBinding>,
     ignore_editable_targets: bool,
 }
@@ -159,83 +158,84 @@ pub struct MullionKeymap {
 impl MullionKeymap {
     pub fn new(prefix: KeyChord) -> Self {
         Self {
-            prefix,
+            prefix: Some(prefix),
             bindings: Vec::new(),
             ignore_editable_targets: true,
         }
     }
 
-    /// Mullion's default `Ctrl+M` command map.
-    ///
-    /// Arrow keys navigate directly after the prefix. Multi-step groups use a
-    /// mnemonic first key: `M`ove, `S`wap, `R`esize, `N`ew, `O`rient,
-    /// `C`ycle, `L`ayout, and `F`ocus by number.
+    /// Create a map whose bindings do not require a prefix.
+    pub fn unprefixed() -> Self {
+        Self {
+            prefix: None,
+            bindings: Vec::new(),
+            ignore_editable_targets: true,
+        }
+    }
+
+    /// Mullion's direct, modifier-based default command map.
     pub fn mullion() -> Self {
         use PaneCommand::*;
         use PaneDirection::*;
 
-        let mut map = Self::new(KeyChord::new("m").control());
+        let mut map = Self::unprefixed();
         for (key, direction) in [
             ("ArrowLeft", Left),
             ("ArrowDown", Down),
             ("ArrowUp", Up),
             ("ArrowRight", Right),
         ] {
-            map.bind(KeyChord::new(key), Focus(direction));
-            map.bind_sequence([KeyChord::new("m"), KeyChord::new(key)], Move(direction));
-            map.bind_sequence([KeyChord::new("s"), KeyChord::new(key)], Swap(direction));
-            map.bind_sequence([KeyChord::new("r"), KeyChord::new(key)], Resize(direction));
+            map.bind(KeyChord::new(key).alt(), Focus(direction));
+            map.bind(KeyChord::new(key).alt().shift(), Move(direction));
+            map.bind(KeyChord::new(key).control().shift(), Swap(direction));
+            map.bind(KeyChord::new(key).control().alt(), Resize(direction));
         }
 
-        map.bind(KeyChord::new("Tab"), FocusNext);
-        map.bind(KeyChord::new("Tab").shift(), FocusPrevious);
-        map.bind(KeyChord::new("Home"), FocusFirst);
-        map.bind(KeyChord::new("End"), FocusLast);
+        map.bind(KeyChord::new("PageDown").alt(), FocusNext);
+        map.bind(KeyChord::new("PageUp").alt(), FocusPrevious);
+        map.bind(KeyChord::new("Home").alt(), FocusFirst);
+        map.bind(KeyChord::new("End").alt(), FocusLast);
         for index in 0..9 {
-            map.bind_sequence(
-                [KeyChord::new("f"), KeyChord::new((index + 1).to_string())],
+            map.bind(
+                KeyChord::new((index + 1).to_string()).alt(),
                 FocusIndex(index),
             );
         }
 
-        // Splits always insert the new pane as the second child, which is the
-        // pane to the right or below. Name the keys for that visible outcome
-        // instead of exposing the ambiguous "horizontal/vertical split" terms.
-        map.bind_sequence(
-            [KeyChord::new("n"), KeyChord::new("r")],
+        map.bind(
+            KeyChord::new("ArrowRight").control().alt().shift(),
             Split(SplitDirection::Horizontal),
         );
-        map.bind_sequence(
-            [KeyChord::new("n"), KeyChord::new("d")],
+        map.bind(
+            KeyChord::new("ArrowDown").control().alt().shift(),
             Split(SplitDirection::Vertical),
         );
-        map.bind(KeyChord::new("Delete"), Close);
-        map.bind(KeyChord::new("Backspace"), Close);
-        map.bind(KeyChord::new("Enter"), ToggleZoom);
+        map.bind(KeyChord::new("Backspace").control().shift(), Close);
+        map.bind(KeyChord::new("Enter").control().shift(), ToggleZoom);
 
-        map.bind_sequence([KeyChord::new("s"), KeyChord::new("[")], SwapPrevious);
-        map.bind_sequence([KeyChord::new("s"), KeyChord::new("]")], SwapNext);
+        map.bind(KeyChord::new("PageUp").control().shift(), SwapPrevious);
+        map.bind(KeyChord::new("PageDown").control().shift(), SwapNext);
 
-        map.bind_sequence(
-            [KeyChord::new("o"), KeyChord::new("r")],
+        map.bind(
+            KeyChord::new("h").control().alt(),
             SetParentSplitDirection(SplitDirection::Horizontal),
         );
-        map.bind_sequence(
-            [KeyChord::new("o"), KeyChord::new("d")],
+        map.bind(
+            KeyChord::new("v").control().alt(),
             SetParentSplitDirection(SplitDirection::Vertical),
         );
-        map.bind_sequence(
-            [KeyChord::new("o"), KeyChord::new("t")],
+        map.bind(
+            KeyChord::new("o").control().alt(),
             ToggleParentSplitDirection,
         );
-        map.bind(KeyChord::new("b"), Balance);
+        map.bind(KeyChord::new("=").control().alt(), Balance);
 
-        map.bind_sequence(
-            [KeyChord::new("c"), KeyChord::new("ArrowLeft")],
+        map.bind(
+            KeyChord::new("[").control().alt(),
             Rotate(PaneRotation::Backward),
         );
-        map.bind_sequence(
-            [KeyChord::new("c"), KeyChord::new("ArrowRight")],
+        map.bind(
+            KeyChord::new("]").control().alt(),
             Rotate(PaneRotation::Forward),
         );
 
@@ -246,10 +246,7 @@ impl MullionKeymap {
             ("4", PaneLayout::MainVertical),
             ("5", PaneLayout::Tiled),
         ] {
-            map.bind_sequence(
-                [KeyChord::new("l"), KeyChord::new(key)],
-                ApplyLayout(layout),
-            );
+            map.bind(KeyChord::new(key).control().alt(), ApplyLayout(layout));
         }
         map
     }
@@ -324,8 +321,8 @@ impl MullionKeymap {
         map
     }
 
-    pub fn prefix(&self) -> &KeyChord {
-        &self.prefix
+    pub fn prefix(&self) -> Option<&KeyChord> {
+        self.prefix.as_ref()
     }
 
     pub fn bindings(&self) -> &[MullionKeyBinding] {
@@ -373,13 +370,15 @@ impl MullionKeymap {
         self
     }
 
-    /// Display the full prefix sequence for a command, if it is bound.
+    /// Display the full key sequence for a command, including its prefix when
+    /// the map has one.
     pub fn sequence_for(&self, command: PaneCommand) -> Option<String> {
         self.bindings
             .iter()
             .find(|binding| binding.command == command)
             .map(|binding| {
-                std::iter::once(&self.prefix)
+                self.prefix
+                    .iter()
                     .chain(binding.sequence.iter())
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
@@ -427,7 +426,7 @@ impl Default for MullionKeymap {
     }
 }
 
-/// Mount the global listener for a prefix-based Mullion keymap.
+/// Mount the global listener for a direct or prefixed Mullion keymap.
 ///
 /// This component renders no DOM and should be mounted once. It is opt-in so a
 /// library upgrade never starts consuming an application's existing shortcuts.
@@ -436,40 +435,52 @@ pub fn MullionKeybindings<D: PaneData + Send + Sync>(
     commands: MullionCommands<D>,
     #[prop(optional)] keymap: MullionKeymap,
 ) -> impl IntoView {
-    let prefix_active = RwSignal::new(false);
+    let uses_prefix = keymap.prefix.is_some();
+    let sequence_active = RwSignal::new(!uses_prefix);
     let pending_strokes = RwSignal::new(Vec::<KeyStroke>::new());
     let handle = window_event_listener(leptos::ev::keydown, move |event| {
         if keymap.ignore_editable_targets && has_editable_target(&event) {
-            prefix_active.set(false);
+            sequence_active.set(!uses_prefix);
             pending_strokes.set(Vec::new());
             return;
         }
 
         let stroke = KeyStroke::from_event(&event);
-        if keymap.prefix.matches(&stroke) {
+        if keymap
+            .prefix
+            .as_ref()
+            .is_some_and(|prefix| prefix.matches(&stroke))
+        {
             event.prevent_default();
-            prefix_active.set(true);
+            sequence_active.set(true);
             pending_strokes.set(Vec::new());
             return;
         }
 
-        if !prefix_active.get_untracked() {
+        if !sequence_active.get_untracked() {
             return;
         }
-        if normalize_key(&stroke.key) == "escape" {
+        if normalize_key(&stroke.key) == "escape"
+            && (uses_prefix || !pending_strokes.get_untracked().is_empty())
+        {
             event.prevent_default();
-            prefix_active.set(false);
+            sequence_active.set(!uses_prefix);
             pending_strokes.set(Vec::new());
             return;
         }
 
         let mut strokes = pending_strokes.get_untracked();
-        strokes.push(stroke);
-        match keymap.match_sequence(&strokes) {
+        strokes.push(stroke.clone());
+        let mut matched = keymap.match_sequence(&strokes);
+        if matched == SequenceMatch::NoMatch && !uses_prefix && strokes.len() > 1 {
+            strokes = vec![stroke];
+            matched = keymap.match_sequence(&strokes);
+        }
+        match matched {
             SequenceMatch::Command(command) => {
                 event.prevent_default();
                 event.stop_propagation();
-                prefix_active.set(false);
+                sequence_active.set(!uses_prefix);
                 pending_strokes.set(Vec::new());
                 let _ = commands.execute(command);
             }
@@ -479,7 +490,7 @@ pub fn MullionKeybindings<D: PaneData + Send + Sync>(
                 pending_strokes.set(strokes);
             }
             SequenceMatch::NoMatch => {
-                prefix_active.set(false);
+                sequence_active.set(!uses_prefix);
                 pending_strokes.set(Vec::new());
             }
         }
@@ -511,30 +522,30 @@ mod tests {
         keys.iter().map(|key| KeyStroke::new(*key)).collect()
     }
 
+    fn stroke(chord: KeyChord) -> KeyStroke {
+        KeyStroke {
+            key: chord.key,
+            control: chord.control,
+            alt: chord.alt,
+            shift: chord.shift,
+            meta: chord.meta,
+        }
+    }
+
     #[test]
-    fn mullion_default_groups_directional_actions_mnemonically() {
+    fn mullion_default_uses_direct_modifier_combinations() {
         let map = MullionKeymap::default();
-        assert!(map.prefix().matches(&KeyStroke {
-            key: "m".into(),
-            control: true,
-            alt: false,
-            shift: false,
-            meta: false,
-        }));
+        assert_eq!(map.prefix(), None);
         assert_eq!(
-            map.match_sequence(&sequence(&["ArrowLeft"])),
+            map.match_sequence(&[stroke(KeyChord::new("ArrowLeft").alt())]),
             SequenceMatch::Command(PaneCommand::Focus(PaneDirection::Left))
         );
         assert_eq!(
-            map.match_sequence(&sequence(&["m"])),
-            SequenceMatch::Pending
-        );
-        assert_eq!(
-            map.match_sequence(&sequence(&["m", "ArrowLeft"])),
+            map.match_sequence(&[stroke(KeyChord::new("ArrowLeft").alt().shift())]),
             SequenceMatch::Command(PaneCommand::Move(PaneDirection::Left))
         );
         assert_eq!(
-            map.match_sequence(&sequence(&["n", "r"])),
+            map.match_sequence(&[stroke(KeyChord::new("ArrowRight").control().alt().shift())]),
             SequenceMatch::Command(PaneCommand::Split(SplitDirection::Horizontal))
         );
     }
@@ -556,7 +567,7 @@ mod tests {
     #[test]
     fn tmux_prefix_and_navigation_are_bound() {
         let map = MullionKeymap::tmux();
-        assert!(map.prefix().matches(&KeyStroke {
+        assert!(map.prefix().unwrap().matches(&KeyStroke {
             key: "b".into(),
             control: true,
             alt: false,

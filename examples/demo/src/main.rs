@@ -332,11 +332,17 @@ fn SettingsActivity() -> impl IntoView {
 fn default_workspace() -> PaneNode<DemoData> {
     PaneNode::Split {
         direction: SplitDirection::Horizontal,
-        ratio: 0.5,
+        ratio: 0.4,
         first: Box::new(PaneNode::leaf_with_activity(PaneId::new("1"), ActivityId::new("1"),
             DemoData { label: "Left".into(), ..Default::default() })),
-        second: Box::new(PaneNode::leaf_with_activity(PaneId::new("2"), ActivityId::new("2"),
-            DemoData { label: "Right".into(), ..Default::default() })),
+        second: Box::new(PaneNode::Split {
+            direction: SplitDirection::Vertical,
+            ratio: 0.5,
+            first: Box::new(PaneNode::leaf_with_activity(PaneId::new("2"), ActivityId::new("2"),
+                DemoData { label: "Right Top".into(), ..Default::default() })),
+            second: Box::new(PaneNode::leaf_with_activity(PaneId::new("3"), ActivityId::new("3"),
+                DemoData { label: "Right Bottom".into(), ..Default::default() })),
+        }),
     }
 }
 

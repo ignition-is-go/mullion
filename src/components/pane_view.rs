@@ -1,9 +1,9 @@
 use leptos::prelude::*;
 use leptos_resize_handle::{use_drag, Direction as LrhDirection};
 
-use crate::context::MullionContext;
+use crate::context::{normalize_pane_opacity, MullionContext};
 use crate::drag::DragPayload;
-use crate::focus::PaneFocusBehavior;
+use crate::focus::{PaneFocusBehavior, FOCUS_COLOR};
 use crate::theme::MullionTheme;
 use crate::tree::{
     collect_split_keys, find_split_direction, leaf_rect, split_parent_rect, ActivityId, PaneData,
@@ -205,8 +205,12 @@ fn LeafView<D: PaneData + Send + Sync>(
     let focused_pane_attr = ctx.focused_pane;
     let id_focused_attr = id.clone();
     let focused_pane_frame = ctx.focused_pane;
+    let focused_pane_wash = ctx.focused_pane;
     let zoomed_pane_frame = ctx.zoomed_pane;
+    let show_focus_indicator = ctx.show_focus_indicator;
+    let unfocused_pane_opacity = ctx.unfocused_pane_opacity;
     let id_focus_frame = id.clone();
+    let id_focus_wash = id.clone();
     let id_zoom_frame = id.clone();
 
     // Does this pane hide its activity bar? (Role is stable for a pane's lifetime,
@@ -250,13 +254,18 @@ fn LeafView<D: PaneData + Send + Sync>(
     };
 
     let focus_frame_style = move || {
-        let focused = focused_pane_frame.get().as_ref() == Some(&id_focus_frame);
+        let focused =
+            show_focus_indicator && focused_pane_frame.get().as_ref() == Some(&id_focus_frame);
         let rendered_rect = if zoomed_pane_frame.get().as_ref() == Some(&id_zoom_frame) {
             Rect::FULL
         } else {
             rect.get()
         };
         focus_frame_css(focused, rendered_rect, focus_bar_edge, &focus_bar_width)
+    };
+    let unfocused_wash_style = move || {
+        let focused = focused_pane_wash.get().as_ref() == Some(&id_focus_wash);
+        unfocused_wash_css(focused, unfocused_pane_opacity)
     };
 
     view! {
@@ -296,6 +305,11 @@ fn LeafView<D: PaneData + Send + Sync>(
                 {hide_bar.then(|| view! { <PaneHoverControls pane_id=id_hover data=data ctx=ctx_hover /> })}
             </div>
             <div
+                data-mullion-unfocused-wash=""
+                aria-hidden="true"
+                style=unfocused_wash_style
+            />
+            <div
                 data-mullion-focus-frame=""
                 aria-hidden="true"
                 style=focus_frame_style
@@ -331,7 +345,7 @@ fn focus_frame_css(
     let edges = focus_edges(rect);
     let width = |visible| {
         if visible {
-            "var(--ml-focus-width, 2px)"
+            "var(--ml-focus-width, 1px)"
         } else {
             "0"
         }
@@ -347,12 +361,22 @@ fn focus_frame_css(
     format!(
         "position:absolute;top:{top};right:{right};bottom:{bottom};left:{left};z-index:6;\
          pointer-events:none;box-sizing:border-box;\
-         border-style:solid;border-color:var(--ml-focus-color,var(--ml-primary,#00a4ef));\
+         border-style:solid;border-color:{FOCUS_COLOR};\
          border-width:{} {} {} {};opacity:{opacity};transition:opacity 100ms ease-out;",
         width(edges.top),
         width(edges.right),
         width(edges.bottom),
         width(edges.left),
+    )
+}
+
+fn unfocused_wash_css(focused: bool, pane_opacity: f64) -> String {
+    let pane_opacity = normalize_pane_opacity(pane_opacity);
+    let wash_opacity = if focused { 0.0 } else { 1.0 - pane_opacity };
+    format!(
+        "position:absolute;inset:0;z-index:4;pointer-events:none;\
+         background:var(--ml-unfocused-pane-color,var(--ml-bg,#0e0e0e));\
+         opacity:{wash_opacity};transition:opacity 125ms ease-out;"
     )
 }
 
@@ -424,9 +448,25 @@ mod focus_tests {
             None,
             "28px",
         );
-        assert!(css.contains("var(--ml-focus-color,var(--ml-primary,#00a4ef))"));
-        assert!(css.contains("0 var(--ml-focus-width, 2px) 0 0"));
+        assert!(css.contains(FOCUS_COLOR));
+        assert!(css.contains("0 var(--ml-focus-width, 1px) 0 0"));
         assert!(css.contains("opacity:1"));
+    }
+
+    #[test]
+    fn unfocused_wash_is_disabled_by_default() {
+        let css = unfocused_wash_css(false, 1.0);
+        assert!(css.contains("opacity:0;"));
+        assert!(css.contains("z-index:4"));
+        assert!(css.contains("pointer-events:none"));
+    }
+
+    #[test]
+    fn unfocused_wash_maps_pane_opacity_without_dimming_focus() {
+        assert!(unfocused_wash_css(false, 0.75).contains("opacity:0.25;"));
+        assert!(unfocused_wash_css(true, 0.75).contains("opacity:0;"));
+        assert!(unfocused_wash_css(false, -1.0).contains("opacity:1;"));
+        assert!(unfocused_wash_css(false, f64::NAN).contains("opacity:0;"));
     }
 
     #[test]

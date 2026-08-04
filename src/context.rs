@@ -123,6 +123,19 @@ pub struct MullionContext<D: PaneData> {
     pub focused_pane: RwSignal<Option<PaneId>>,
     /// Live preferences shared with the host application's settings UI.
     pub settings: MullionSettings,
+    /// Whether the focused pane paints its internal-edge indicator.
+    ///
+    /// Focus state and commands remain active when this is `false`; only the
+    /// presentation is suppressed. The legacy-safe default is `false` so a
+    /// dependency update cannot add accent chrome to an existing application.
+    pub show_focus_indicator: bool,
+    /// Opacity presented for panes that do not have focus.
+    ///
+    /// `1.0` disables the treatment and preserves existing rendering. Values
+    /// are clamped to `0.0..=1.0`. Mullion implements the effect with a
+    /// non-interactive wash instead of applying CSS `opacity` to the pane, so
+    /// pane chrome and stacking behavior remain intact.
+    pub unfocused_pane_opacity: f64,
     /// The pane temporarily occupying the full Mullion viewport.
     ///
     /// This is presentation state: toggling zoom does not rewrite or emit a
@@ -227,6 +240,8 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             event_tx: StoredValue::new(Box::new(event_handler)),
             focused_pane: RwSignal::new(initial_focus),
             settings: MullionSettings::default(),
+            show_focus_indicator: false,
+            unfocused_pane_opacity: 1.0,
             zoomed_pane: RwSignal::new(None),
             drag: RwSignal::new(None),
             theme,
@@ -264,6 +279,26 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     /// Bind the context to host-controlled Mullion preferences.
     pub fn with_settings(mut self, settings: MullionSettings) -> Self {
         self.settings = settings;
+        self
+    }
+
+    /// Opt in or out of the focused pane's visual indicator.
+    ///
+    /// This does not affect focus tracking or focus-relative commands. Theme
+    /// the opted-in frame with `--ml-focus-color` and `--ml-focus-width`.
+    pub fn with_focus_indicator(mut self, visible: bool) -> Self {
+        self.show_focus_indicator = visible;
+        self
+    }
+
+    /// Set the visual opacity of panes that do not have focus.
+    ///
+    /// The legacy-safe default is `1.0` (no wash). For a Tabby-like treatment,
+    /// use `0.75`. Non-finite values fall back to `1.0`; finite values are
+    /// clamped to `0.0..=1.0`. Theme the wash with
+    /// `--ml-unfocused-pane-color`.
+    pub fn with_unfocused_pane_opacity(mut self, opacity: f64) -> Self {
+        self.unfocused_pane_opacity = normalize_pane_opacity(opacity);
         self
     }
 
@@ -877,6 +912,14 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             .unwrap()
             .get(&id)
             .map(|el| el.get_bounding_client_rect())
+    }
+}
+
+pub(crate) fn normalize_pane_opacity(opacity: f64) -> f64 {
+    if opacity.is_finite() {
+        opacity.clamp(0.0, 1.0)
+    } else {
+        1.0
     }
 }
 

@@ -6,14 +6,49 @@
     <title>Mullion Demo</title>
     <link data-trunk rel="rust" data-wasm-opt="z" />
     <style>
-        :root { interpolate-size: allow-keywords; }
+        :root {
+            interpolate-size: allow-keywords;
+            /* Keep the library's inactive wash slightly cooler than the page
+               background. Its strength comes from the component prop. */
+            --ml-unfocused-pane-color: rgb(3 9 14);
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; height: 100%; background: #0e0e0e; color: #eee; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
         .activity-content { padding: 16px; height: 100%; overflow: auto; }
         .activity-content h2 { margin-bottom: 12px; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: #bbb; }
         .activity-content p { opacity: 0.85; font-size: 13px; line-height: 1.6; }
-        .file-item { padding: 4px 8px; cursor: pointer; font-size: 13px; border-radius: 3px; color: #ddd; }
+        .section-label { margin: 16px 0 6px; color: #777; font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; }
+        .file-item { padding: 5px 8px; cursor: pointer; font-size: 13px; border-radius: 3px; color: #ddd; }
         .file-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+        .file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+        .file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-status { font: 600 10px/1 monospace; }
+        .modified { color: #e8ab53; }
+        .added, .success { color: #73c991; }
+        .info { color: #75beff; }
+        .muted { color: #777; }
+        .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 12px; }
+        .summary-card { padding: 9px 10px; border: 1px solid #222; border-radius: 5px; background: #131313; }
+        .summary-value { display: block; color: #ddd; font-size: 15px; font-weight: 600; }
+        .summary-label { display: block; margin-top: 3px; color: #707070; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .editor-list { display: grid; gap: 8px; }
+        .editor-card { display: grid; grid-template-columns: 3px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid #222; border-radius: 5px; background: #131313; }
+        .editor-accent { align-self: stretch; border-radius: 2px; background: #75beff; }
+        .editor-name { color: #ddd; font-size: 12px; font-weight: 600; }
+        .editor-path { display: block; margin-top: 3px; color: #707070; font: 10px/1.3 monospace; }
+        .editor-meta { color: #777; font: 10px/1 monospace; }
+        .code-preview { margin-top: 10px; padding: 11px 12px; overflow: hidden; border: 1px solid #202020; border-radius: 5px; background: #0b0b0b; color: #929292; font: 11px/1.65 monospace; white-space: pre; }
+        .code-keyword { color: #c586c0; }
+        .code-type { color: #75beff; }
+        .timeline-list { display: grid; gap: 0; }
+        .timeline-row { position: relative; display: grid; grid-template-columns: 48px 9px minmax(0, 1fr); gap: 10px; min-height: 50px; }
+        .timeline-time { padding-top: 2px; color: #666; font: 10px/1.2 monospace; }
+        .timeline-rail { position: relative; }
+        .timeline-rail::before { content: ""; position: absolute; top: 8px; bottom: -8px; left: 4px; width: 1px; background: #252525; }
+        .timeline-row:last-child .timeline-rail::before { display: none; }
+        .timeline-dot { position: absolute; top: 3px; left: 1px; width: 7px; height: 7px; border: 2px solid currentColor; border-radius: 50%; background: #111; }
+        .timeline-title { display: block; color: #d5d5d5; font-size: 12px; font-weight: 500; }
+        .timeline-detail { display: block; margin-top: 4px; color: #737373; font-size: 11px; line-height: 1.35; }
     </style>
 </head>
 <body>

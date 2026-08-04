@@ -89,9 +89,17 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     #[prop(optional)]
     activity_bar_edge: ActivityBarEdge,
     /// Reactive preferences shared with the host's settings UI/store. Defaults
-    /// to a local handle with click-to-focus enabled.
+    /// to a local handle preserving hover-to-focus behavior.
     #[prop(optional)]
     settings: MullionSettings,
+    /// Paint the focused pane's internal-edge indicator. Focus state and
+    /// commands work regardless. Default: `false`, preserving existing chrome.
+    #[prop(default = false)]
+    show_focus_indicator: bool,
+    /// Visual opacity of panes that do not have focus. `1.0` (the default)
+    /// leaves them unchanged; `0.75` gives a stronger terminal-mux treatment.
+    #[prop(default = 1.0)]
+    unfocused_pane_opacity: f64,
     /// Optional predicate: panes for which it returns `true` hide their activity
     /// bar (getting hover controls instead). Default: every pane keeps its bar.
     #[prop(optional)]
@@ -155,7 +163,9 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         bottom_trailing,
     )
     .with_activity_bar_edge(activity_bar_edge)
-    .with_settings(settings.clone());
+    .with_settings(settings.clone())
+    .with_focus_indicator(show_focus_indicator)
+    .with_unfocused_pane_opacity(unfocused_pane_opacity);
 
     if let Some(upstream_sig) = upstream {
         let ctx_clone = ctx.clone();
@@ -221,9 +231,17 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     #[prop(optional)]
     activity_bar_edge: ActivityBarEdge,
     /// Reactive preferences shared with the host's settings UI/store. Defaults
-    /// to a local handle with click-to-focus enabled.
+    /// to a local handle preserving hover-to-focus behavior.
     #[prop(optional)]
     settings: MullionSettings,
+    /// Paint the focused pane's internal-edge indicator. Focus state and
+    /// commands work regardless. Default: `false`, preserving existing chrome.
+    #[prop(default = false)]
+    show_focus_indicator: bool,
+    /// Visual opacity of panes that do not have focus. `1.0` (the default)
+    /// leaves them unchanged; `0.75` gives a stronger terminal-mux treatment.
+    #[prop(default = 1.0)]
+    unfocused_pane_opacity: f64,
     /// Optional predicate: panes for which it returns `true` hide their activity
     /// bar (getting hover controls instead). Default: every pane keeps its bar.
     #[prop(optional)]
@@ -286,7 +304,9 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         bottom_trailing,
     )
     .with_activity_bar_edge(activity_bar_edge)
-    .with_settings(settings.clone());
+    .with_settings(settings.clone())
+    .with_focus_indicator(show_focus_indicator)
+    .with_unfocused_pane_opacity(unfocused_pane_opacity);
 
     if let Some(upstream_sig) = upstream {
         let ctx_clone = ctx.clone();

@@ -211,11 +211,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn click_is_the_default_focus_behavior() {
+    fn hover_is_the_legacy_safe_default_focus_behavior() {
         let settings = MullionSettings::default();
         assert_eq!(
             settings.focus_behavior_untracked(),
-            PaneFocusBehavior::Click
+            PaneFocusBehavior::Hover
         );
     }
 

@@ -576,6 +576,45 @@ mod tests {
     }
 
     #[test]
+    fn focus_indicator_is_presentation_opt_in() {
+        let owner = Owner::new();
+        owner.set();
+        let context = context(two_panes());
+
+        assert!(!context.show_focus_indicator);
+        assert_eq!(context.unfocused_pane_opacity, 1.0);
+        assert!(context.with_focus_indicator(true).show_focus_indicator);
+    }
+
+    #[test]
+    fn unfocused_pane_opacity_is_optional_and_clamped() {
+        let owner = Owner::new();
+        owner.set();
+        let context = context(two_panes());
+
+        assert_eq!(
+            context
+                .clone()
+                .with_unfocused_pane_opacity(0.75)
+                .unfocused_pane_opacity,
+            0.75
+        );
+        assert_eq!(
+            context
+                .clone()
+                .with_unfocused_pane_opacity(-1.0)
+                .unfocused_pane_opacity,
+            0.0
+        );
+        assert_eq!(
+            context
+                .with_unfocused_pane_opacity(f64::INFINITY)
+                .unfocused_pane_opacity,
+            1.0
+        );
+    }
+
+    #[test]
     fn split_requires_and_uses_the_host_factory() {
         let owner = Owner::new();
         owner.set();

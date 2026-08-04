@@ -5,6 +5,7 @@ use leptos::prelude::*;
 use crate::activity::{ActivityIcon, ActivityNode};
 use crate::context::MullionContext;
 use crate::drag::DragPayload;
+use crate::focus::FOCUSED_GRABBER_COLOR;
 use crate::theme::MullionTheme;
 use crate::tree::{ActivityId, CategoryId, PaneData, PaneId, SplitDirection};
 
@@ -583,6 +584,14 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     let pid_leading = pane_id.clone();
     let bottom_trailing = ctx.bottom_trailing.clone();
     let pid_trailing = pane_id.clone();
+    let focused_pane_grabber = ctx.focused_pane;
+    let show_focus_indicator = ctx.show_focus_indicator;
+    let pid_grabber = pane_id.clone();
+    let grabber_style = move || {
+        focused_grabber_css(
+            show_focus_indicator && focused_pane_grabber.get().as_ref() == Some(&pid_grabber),
+        )
+    };
 
     // Reactive on `drag`: while a drag is in flight the bar gets the `dragging`
     // modifier so it stays open (see the CSS for why that is load-bearing, not
@@ -623,7 +632,8 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                         let pid_drag = pane_id.clone();
                         view! {
                             <div class=ActivityBarStyle::BTN
-                                 style="cursor:grab"
+                                 data-mullion-pane-grabber=""
+                                 style=grabber_style
                                  draggable="true"
                                  on:dragstart=move |ev| {
                                      ctx_drag.drag.set(Some(DragPayload::Pane(pid_drag.clone())));
@@ -694,6 +704,18 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                 </div>
             </div>
         </div>
+    }
+}
+
+fn focused_grabber_css(focused: bool) -> String {
+    if focused {
+        format!(
+            "cursor:grab;--ab-icon-color:{FOCUSED_GRABBER_COLOR};\
+             --ab-icon-stroke-color:{FOCUSED_GRABBER_COLOR};opacity:1;\
+             transition:color 125ms ease-out,opacity 125ms ease-out"
+        )
+    } else {
+        "cursor:grab;transition:color 125ms ease-out,opacity 125ms ease-out".into()
     }
 }
 
@@ -1350,6 +1372,19 @@ mod tests {
     #[test]
     fn behavior_defaults_to_hover_expand_true() {
         assert!(ActivityBarBehavior::default().hover_expand);
+    }
+
+    #[test]
+    fn focused_grabber_uses_the_focus_accent_only_when_enabled() {
+        let inactive = focused_grabber_css(false);
+        assert!(!inactive.contains("--ml-focused-grabber-color"));
+        assert!(!inactive.contains("opacity:1"));
+
+        let focused = focused_grabber_css(true);
+        assert!(focused.contains(FOCUSED_GRABBER_COLOR));
+        assert!(focused.contains("--ab-icon-color"));
+        assert!(focused.contains("--ab-icon-stroke-color"));
+        assert!(focused.contains("opacity:1"));
     }
 }
 

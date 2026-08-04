@@ -158,14 +158,14 @@ to one item at a time, and an auto-hidden bar reveals from its configured edge.
 
 ## Focus and pane commands
 
-The first pane starts focused. Focus is durable state in `ctx.focused_pane`, is
-marked by a high-contrast accent on the internal separators surrounding that
-pane, and drives every focus-relative command. Root-container edges are omitted,
-so the marker traces only the boundaries that distinguish the focused pane from
-its neighbors. A pinned activity bar gets its own visual lane: the focus frame
-is inset to the bar's content edge and painted below the bar, so category and
-active-activity colors never compete with pane focus. Choose how pointer
-interaction changes focus:
+The first pane starts focused. Focus is durable state in `ctx.focused_pane` and
+drives every focus-relative command. To make that state visible, opt into an
+indicator on the internal separators surrounding the pane. Root-container edges
+are omitted, so the marker traces only boundaries that distinguish the focused
+pane from its neighbors. A pinned activity bar gets its own visual lane: the
+focus frame is inset to the bar's content edge and painted below the bar, so
+category and active-activity colors never compete with pane focus. Choose how
+pointer interaction changes focus:
 
 ```rust
 let app_focus_behavior = RwSignal::new(load_focus_behavior());
@@ -182,6 +182,8 @@ view! {
         initial_tree=tree
         items=items
         settings=mullion_settings
+        show_focus_indicator=true
+        unfocused_pane_opacity=0.75
         on_event=|_| {}
     >
         <AppLayout />
@@ -189,11 +191,24 @@ view! {
 }
 ```
 
-`Click` is the default and keeps focus on the last pane pressed. `Hover` is an
-opt-in focus-follows-pointer mode. Programmatic focus works in either mode.
-Set `--ml-focus-color` and `--ml-focus-width` on any Mullion ancestor to theme
-the indicator. The color falls back to `--ml-primary`, then `#00a4ef`; width
-defaults to `2px`. These standalone variables avoid adding fields to the public
+`Hover` is the legacy-safe default. `Click` is opt-in and keeps focus on the last
+pane pressed. Programmatic focus works in either mode. The visual indicator is
+also opt-in through `show_focus_indicator`; focus tracking and commands remain
+available when it is hidden.
+
+When enabled, the indicator uses a quiet `1px` frame whose color is 65% primary
+and 35% pane border, and colors the focused pane's activity-bar grabber with the
+same accent. Set `--ml-focus-color`, `--ml-focus-width`, or
+`--ml-focused-grabber-color` on any Mullion ancestor to tune those pieces.
+
+`unfocused_pane_opacity` is independent and also opt-in. It defaults to `1.0`,
+which leaves every pane unchanged; `0.75` gives inactive panes the stronger
+Tabby-like treatment used by the demo. Values are clamped to `0.0..=1.0`.
+Mullion renders this as a non-interactive wash below pane chrome rather than
+applying CSS opacity to the pane, preserving drag targets and stacking. Override
+the wash color with `--ml-unfocused-pane-color` (default: `--ml-bg`).
+
+These standalone variables avoid adding presentation fields to the public
 `MullionTheme` struct.
 
 ### Settings integration
@@ -224,11 +239,11 @@ setter. `MullionProvider` also provides its `MullionSettings` handle through
 Leptos context, which is convenient for an app-owned settings activity rendered
 inside Mullion.
 
-For applications without a settings system, use
-`MullionSettings::local(PaneFocusBehavior::Click)` or simply omit the `settings`
-prop to get a local click-to-focus default. The runtime handle itself is not
-serialized; persist the serializable `PaneFocusBehavior` in the application's
-existing configuration model.
+For applications without a settings system, omit the `settings` prop to preserve
+hover-to-focus behavior, or use
+`MullionSettings::local(PaneFocusBehavior::Click)` to opt into durable click
+focus. The runtime handle itself is not serialized; persist the serializable
+`PaneFocusBehavior` in the application's existing configuration model.
 
 `MullionCommands<D>` is the dependency-free command dispatcher. Split commands
 require a host factory because Mullion cannot invent application ids or data:

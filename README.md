@@ -135,6 +135,22 @@ provide_context(ActivityBarBehavior {
 });
 ```
 
+Hover expansion is immediate by default. Set `activity_bar_expand_delay_ms` on
+`MullionRoot` or `MullionProvider` to require a short hover intent before the
+bar opens:
+
+```rust
+view! {
+    <MullionRoot
+        // ...
+        activity_bar_expand_delay_ms=250
+    />
+}
+```
+
+The delay applies only when opening, including auto-hidden bars and horizontal
+items. Leaving the hover target still collapses the bar immediately.
+
 ### Activity bar edge
 
 Activity bars are vertical on the left by default. Set the optional edge prop

@@ -9,7 +9,9 @@ use crate::settings::MullionSettings;
 use crate::theme::MullionTheme;
 use crate::tree::{PaneData, PaneNode};
 
-use super::activity_bar::{ActivityBarBehavior, ActivityBarEdge, ActivityBarStyle};
+use super::activity_bar::{
+    activity_bar_hover_delay_css, ActivityBarBehavior, ActivityBarEdge, ActivityBarStyle,
+};
 use super::drop_overlay::DropOverlayStyle;
 use super::pane_header::HeaderStyle;
 use super::pane_view::{PaneStyle, PaneView};
@@ -35,6 +37,10 @@ impl css_styled::StyledComponentBase for MullionStyle {
             }
         })
     }
+}
+
+fn activity_bar_css(style: &ActivityBarStyle) -> String {
+    format!("{}\n{}", style.to_css(), activity_bar_hover_delay_css())
 }
 
 /// Context-only provider for the mullion pane system.
@@ -88,6 +94,9 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
     /// top and bottom arrange items horizontally.
     #[prop(optional)]
     activity_bar_edge: ActivityBarEdge,
+    /// Delay before a hovered activity bar expands, in milliseconds. Default: 0.
+    #[prop(default = 0)]
+    activity_bar_expand_delay_ms: u32,
     /// Reactive preferences shared with the host's settings UI/store. Defaults
     /// to a local handle preserving hover-to-focus behavior.
     #[prop(optional)]
@@ -133,7 +142,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
-        activity_bar_style.to_css(),
+        activity_bar_css(&activity_bar_style),
         drop_overlay_style.to_css(),
         header_style.to_css(),
         ws_style.to_css(),
@@ -163,6 +172,7 @@ pub fn MullionProvider<D: PaneData + Send + Sync>(
         bottom_trailing,
     )
     .with_activity_bar_edge(activity_bar_edge)
+    .with_activity_bar_expand_delay_ms(activity_bar_expand_delay_ms)
     .with_settings(settings.clone())
     .with_focus_indicator(show_focus_indicator)
     .with_unfocused_pane_opacity(unfocused_pane_opacity);
@@ -230,6 +240,9 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
     /// top and bottom arrange items horizontally.
     #[prop(optional)]
     activity_bar_edge: ActivityBarEdge,
+    /// Delay before a hovered activity bar expands, in milliseconds. Default: 0.
+    #[prop(default = 0)]
+    activity_bar_expand_delay_ms: u32,
     /// Reactive preferences shared with the host's settings UI/store. Defaults
     /// to a local handle preserving hover-to-focus behavior.
     #[prop(optional)]
@@ -274,7 +287,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         split_handle_style.to_css(),
         pane_style.to_css(),
         mullion_style.to_css(),
-        activity_bar_style.to_css(),
+        activity_bar_css(&activity_bar_style),
         drop_overlay_style.to_css(),
         header_style.to_css(),
         ws_style.to_css(),
@@ -304,6 +317,7 @@ pub fn MullionRoot<D: PaneData + Send + Sync>(
         bottom_trailing,
     )
     .with_activity_bar_edge(activity_bar_edge)
+    .with_activity_bar_expand_delay_ms(activity_bar_expand_delay_ms)
     .with_settings(settings.clone())
     .with_focus_indicator(show_focus_indicator)
     .with_unfocused_pane_opacity(unfocused_pane_opacity);
@@ -337,7 +351,7 @@ pub fn MullionPaneTree<D: PaneData + Send + Sync>(ctx: MullionContext<D>) -> imp
         ctx.split_handle_style.to_css(),
         ctx.pane_style.to_css(),
         ctx.mullion_style.to_css(),
-        ctx.activity_bar_style.to_css(),
+        activity_bar_css(&ctx.activity_bar_style),
         ctx.drop_overlay_style.to_css(),
         ctx.header_style.to_css(),
     );

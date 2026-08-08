@@ -159,6 +159,8 @@ pub struct MullionContext<D: PaneData> {
     pub activity_bar_behavior: ActivityBarBehavior,
     /// Edge used by each pane's activity bar.
     pub activity_bar_edge: ActivityBarEdge,
+    /// Hover intent delay before an activity bar expands, in milliseconds.
+    pub(crate) activity_bar_expand_delay_ms: u32,
     /// Optional app icon displayed at the leading edge of every activity bar.
     pub app_icon: Option<ActivityIcon>,
     /// Optional host-provided per-pane chrome rendered in the activity bar's
@@ -253,6 +255,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
             header_style,
             activity_bar_behavior,
             activity_bar_edge: ActivityBarEdge::default(),
+            activity_bar_expand_delay_ms: 0,
             app_icon,
             pane_accessory,
             pane_border_color,
@@ -273,6 +276,12 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
     /// changing that long-standing constructor signature.
     pub fn with_activity_bar_edge(mut self, edge: ActivityBarEdge) -> Self {
         self.activity_bar_edge = edge;
+        self
+    }
+
+    /// Set the hover intent delay before an activity bar expands.
+    pub fn with_activity_bar_expand_delay_ms(mut self, delay_ms: u32) -> Self {
+        self.activity_bar_expand_delay_ms = delay_ms;
         self
     }
 

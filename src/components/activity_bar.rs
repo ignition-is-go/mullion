@@ -93,6 +93,39 @@ impl Default for ActivityBarBehavior {
     }
 }
 
+/// Interaction CSS kept outside `css_styled::css!` so hosts can supply an
+/// inherited custom property without adding a field to the public
+/// `ActivityBarStyle` struct (which would break struct-literal consumers).
+pub(crate) const fn activity_bar_hover_delay_css() -> &'static str {
+    r#"/* Delay only hover-entry rules; their removal restores the zero-delay
+       base transition, so pointer leave still collapses immediately. */
+    .mullion-ab:not(.collapsed):hover .mullion-ab-panel,
+    .mullion-ab.auto_hide:hover .mullion-ab-panel,
+    .mullion-ab:not(.collapsed):hover .mullion-ab-label {
+        transition-delay: var(--ab-hover-expand-delay, 0s);
+    }
+    /* Horizontal bars expand one item rather than the whole toolbar. Suppress
+       the outer label rule, then delay only the item under the pointer. */
+    .mullion-ab[data-axis="horizontal"]:not(.collapsed):hover .mullion-ab-label {
+        transition-delay: 0s;
+    }
+    .mullion-ab[data-axis="horizontal"]:not(.collapsed) .mullion-ab-btn:hover,
+    .mullion-ab[data-axis="horizontal"]:not(.collapsed) .mullion-ab-btn:hover .mullion-ab-label {
+        transition-delay: var(--ab-hover-expand-delay, 0s);
+    }
+    /* An auto-hidden horizontal bar already paid the intent delay while its
+       panel slid in. The item newly arriving under the pointer must not pay it
+       a second time; pinned horizontal bars retain the configured item delay. */
+    .mullion-ab[data-axis="horizontal"].auto_hide:hover .mullion-ab-btn:hover,
+    .mullion-ab[data-axis="horizontal"].auto_hide:hover .mullion-ab-btn:hover .mullion-ab-label {
+        transition-delay: 0s;
+    }"#
+}
+
+fn activity_bar_expand_delay_style(delay_ms: u32) -> String {
+    format!("--ab-hover-expand-delay:{delay_ms}ms")
+}
+
 /// Style for the activity bar, powered by css-styled.
 ///
 /// All customizable values are CSS custom properties. Hover behavior and
@@ -507,6 +540,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
 ) -> impl IntoView {
     let style = ctx.activity_bar_style.clone();
     let edge = ctx.activity_bar_edge;
+    let expand_delay_style = activity_bar_expand_delay_style(ctx.activity_bar_expand_delay_ms);
 
     // Which categories are open. A set rather than a single id because the tree
     // nests: opening a child must not close its parent, or the child would
@@ -618,7 +652,12 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     };
 
     view! {
-        <div class=scope_class data-axis=edge.axis() data-side=edge.side()>
+        <div
+            class=scope_class
+            style=expand_delay_style
+            data-axis=edge.axis()
+            data-side=edge.side()
+        >
             <div
                 class=ActivityBarStyle::PANEL
                 role="toolbar"
@@ -1113,6 +1152,53 @@ mod tests {
     }
 
     #[test]
+    fn hover_expand_delay_is_configurable_and_does_not_delay_close() {
+        let css = format!(
+            "{}\n{}",
+            ActivityBarStyle::default().to_css(),
+            activity_bar_hover_delay_css(),
+        );
+        let compact: String = css.chars().filter(|c| !c.is_whitespace()).collect();
+        let delay = "transition-delay:var(--ab-hover-expand-delay,0s)";
+
+        // Vertical, horizontal-item and auto-hide entry paths all consume the
+        // same inherited host variable.
+        assert_eq!(
+            compact.matches(delay).count(),
+            2,
+            "expected grouped panel/label and horizontal-item delay rules: {css}"
+        );
+        for selector in [
+            ".mullion-ab:not(.collapsed):hover.mullion-ab-panel",
+            ".mullion-ab.auto_hide:hover.mullion-ab-panel",
+            ".mullion-ab[data-axis=\"horizontal\"]:not(.collapsed).mullion-ab-btn:hover",
+        ] {
+            assert!(
+                compact.contains(selector),
+                "missing delayed hover path `{selector}`: {css}"
+            );
+        }
+
+        // The non-hovered base panel owns the closing transition. It must keep
+        // the initial zero delay so leaving the bar never feels sticky.
+        let base_panel = compact
+            .split(".mullion-ab-panel{")
+            .nth(1)
+            .and_then(|block| block.split('}').next())
+            .expect("base activity-bar panel rule");
+        assert!(
+            !base_panel.contains("transition-delay"),
+            "the base/closing transition must remain immediate: {base_panel}"
+        );
+        assert!(
+            compact.contains(
+                ".mullion-ab[data-axis=\"horizontal\"].auto_hide:hover.mullion-ab-btn:hover.mullion-ab-label{transition-delay:0s;}"
+            ),
+            "horizontal auto-hide must not delay both panel reveal and item expansion: {css}"
+        );
+    }
+
+    #[test]
     fn category_card_colour_is_translucent() {
         // Load-bearing, not cosmetic: nested categories render nested cards, and
         // depth is legible only because the fills composite. A solid default
@@ -1307,6 +1393,19 @@ mod tests {
     }
 
     #[test]
+    fn auto_hide_class_matches_delay_selector() {
+        assert_eq!(
+            ActivityBarStyle::class(&[ActivityBarModifier::AutoHide]),
+            "mullion-ab auto_hide",
+        );
+        let delay_css = activity_bar_hover_delay_css();
+        assert!(delay_css.contains(".mullion-ab.auto_hide:hover"));
+        assert!(delay_css.contains(
+            ".mullion-ab[data-axis=\"horizontal\"].auto_hide:hover .mullion-ab-btn:hover"
+        ));
+    }
+
+    #[test]
     fn collapsed_class_has_expected_name() {
         assert_eq!(
             ActivityBarStyle::class(&[ActivityBarModifier::Collapsed]),
@@ -1372,6 +1471,18 @@ mod tests {
     #[test]
     fn behavior_defaults_to_hover_expand_true() {
         assert!(ActivityBarBehavior::default().hover_expand);
+    }
+
+    #[test]
+    fn expand_delay_is_formatted_as_milliseconds() {
+        assert_eq!(
+            activity_bar_expand_delay_style(0),
+            "--ab-hover-expand-delay:0ms"
+        );
+        assert_eq!(
+            activity_bar_expand_delay_style(250),
+            "--ab-hover-expand-delay:250ms"
+        );
     }
 
     #[test]

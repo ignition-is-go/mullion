@@ -21,7 +21,7 @@ env:
 jobs:
   validate:
     name: native, wasm, and demo
-    runs-on: ubuntu-24.04
+    runs-on: public-ci
     timeout-minutes: 30
 
     steps:
@@ -31,13 +31,13 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
-        run: |
-          rustup toolchain install stable \
-            --profile minimal \
-            --component clippy \
-            --component rustfmt \
-            --target wasm32-unknown-unknown
-          rustup default stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+
+      - name: Install native build dependencies
+        run: sudo sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources && sudo apt-get update && sudo apt-get install -y build-essential pkg-config
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1

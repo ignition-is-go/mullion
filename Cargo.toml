@@ -22,7 +22,7 @@ serde_json = "1"
 wasm-bindgen = "0.2"
 css-styled = { git = "https://github.com/ignition-is-go/css-styled.git", version = "0.1.0" }
 leptos-resize-handle = "0.1.0"
-leptos-command-palette = { git = "https://github.com/ignition-is-go/leptos-command-palette.git", rev = "42350c771de43b4df54a13f63394c6e28ec4272e", version = "0.1.0", optional = true }
+leptos-command-palette = { git = "https://github.com/ignition-is-go/leptos-command-palette.git", rev = "f3ab549f7f3320f54da879665d3a696b26d7e8e6", version = "0.1.0", optional = true }
 web-sys = { version = "0.3", features = [
     "DragEvent",
     "DataTransfer",

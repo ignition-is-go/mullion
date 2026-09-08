@@ -1085,7 +1085,7 @@ dependencies = [
 [[package]]
 name = "leptos-command-palette"
 version = "0.1.0"
-source = "git+https://github.com/ignition-is-go/leptos-command-palette.git?rev=42350c771de43b4df54a13f63394c6e28ec4272e#42350c771de43b4df54a13f63394c6e28ec4272e"
+source = "git+https://github.com/ignition-is-go/leptos-command-palette.git?rev=f3ab549f7f3320f54da879665d3a696b26d7e8e6#f3ab549f7f3320f54da879665d3a696b26d7e8e6"
 dependencies = [
  "leptos",
  "wasm-bindgen",

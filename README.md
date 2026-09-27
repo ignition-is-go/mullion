@@ -352,8 +352,8 @@ Mullion paints its chrome in a small, fixed z-band inside the pane tree:
 
 | z-index | element |
 |---------|---------|
-| 5 | split handles |
 | 10 | activity bar panel |
+| 15 | split handles |
 | 20 | drop overlay (drag feedback) |
 
 Activity content is confined below that band: the pane's content column is

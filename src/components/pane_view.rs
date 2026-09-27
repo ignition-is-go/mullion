@@ -42,6 +42,10 @@ use super::drop_overlay::DropOverlay;
 use super::pane_content::PaneContent;
 use super::split_handle::{SplitHandleModifier, SplitHandleStyle};
 
+// Boundary handles must win pointer hit-testing over the neighbouring pane's
+// activity bar. Drop feedback still sits above both while a pane is moving.
+const SPLIT_HANDLE_Z_INDEX: u8 = 15;
+
 /// Renders the pane tree for a `MullionContext`.
 ///
 /// Layout model: **flat** rather than nested. All leaves are rendered as
@@ -601,7 +605,7 @@ fn SplitHandleSlot<D: PaneData + Send + Sync>(
                 let y_pct = r.top * 100.0;
                 let h_pct = r.height * 100.0;
                 format!(
-                    "position:absolute;z-index:5;\
+                    "position:absolute;z-index:{SPLIT_HANDLE_Z_INDEX};\
                      left:calc({x_pct}% - var(--msh-target-thickness) / 2);\
                      top:{y_pct}%;height:{h_pct}%;",
                 )
@@ -611,7 +615,7 @@ fn SplitHandleSlot<D: PaneData + Send + Sync>(
                 let x_pct = r.left * 100.0;
                 let w_pct = r.width * 100.0;
                 format!(
-                    "position:absolute;z-index:5;\
+                    "position:absolute;z-index:{SPLIT_HANDLE_Z_INDEX};\
                      top:calc({y_pct}% - var(--msh-target-thickness) / 2);\
                      left:{x_pct}%;width:{w_pct}%;",
                 )
@@ -698,5 +702,20 @@ fn SplitHandleSlot<D: PaneData + Send + Sync>(
         <div class=handle_class style=handle_style on:mousedown=on_mousedown>
             <span class=SplitHandleStyle::BAR />
         </div>
+    }
+}
+
+#[cfg(test)]
+mod split_handle_stacking_tests {
+    use super::SPLIT_HANDLE_Z_INDEX;
+
+    #[test]
+    fn resize_handle_sits_above_neighboring_activity_bars() {
+        const ACTIVITY_BAR_Z_INDEX: u8 = 10;
+        const DROP_OVERLAY_Z_INDEX: u8 = 20;
+        let handle = std::hint::black_box(SPLIT_HANDLE_Z_INDEX);
+
+        assert!(handle > ACTIVITY_BAR_Z_INDEX);
+        assert!(handle < DROP_OVERLAY_Z_INDEX);
     }
 }

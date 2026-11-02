@@ -61,6 +61,7 @@ pub fn WorkspaceSwitcher<D: PaneData + Send + Sync>(
     manager: WorkspaceManager<D>,
     ctx: MullionContext<D>,
 ) -> impl IntoView {
+    let navigation = use_context::<crate::PaneNavigation<D>>();
     let workspaces = manager.workspaces_signal();
     let active = manager.active_signal();
 
@@ -79,6 +80,7 @@ pub fn WorkspaceSwitcher<D: PaneData + Send + Sync>(
                         WorkspaceSwitcherStyle::BTN.to_string()
                     };
 
+                    let navigation = navigation.clone();
                     let manager = manager.clone();
                     let ctx = ctx.clone();
                     let ws_id_click = ws_id.clone();
@@ -87,7 +89,9 @@ pub fn WorkspaceSwitcher<D: PaneData + Send + Sync>(
                         <button
                             class=class
                             on:click=move |_| {
-                                if let Some(tree) = manager.switch_to(&ws_id_click) {
+                                if let Some(navigation) = &navigation {
+                                    navigation.switch_workspace(&ws_id_click);
+                                } else if let Some(tree) = manager.switch_to(&ws_id_click) {
                                     ctx.set_tree(tree);
                                 }
                             }

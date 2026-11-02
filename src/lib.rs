@@ -49,3 +49,8 @@ pub use workspace::{Workspace, WorkspaceId, WorkspaceManager};
 
 #[cfg(feature = "command-palette")]
 pub use command_palette::{mullion_palette_commands, MullionCommandPalette};
+
+pub mod navigation;
+pub use navigation::{
+    NavigationDiagnostic, NavigationResult, PaneBrowserHistory, PaneLink, PaneNavigation,
+};

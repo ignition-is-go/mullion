@@ -315,7 +315,7 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
         self.event_tx.with_value(|tx| tx(event));
     }
 
-    fn emit_tree_changed(&self) {
+    pub(crate) fn emit_tree_changed(&self) {
         let tree = self.tree.get_untracked();
         self.emit(PaneEvent::TreeChanged { tree });
     }
@@ -797,13 +797,21 @@ impl<D: PaneData + Send + Sync> MullionContext<D> {
 
     /// Set the active activity for a pane.
     pub fn set_active_activity(&self, pane: &PaneId, activity: Option<ActivityId>) {
-        let act_clone = activity.clone();
+        let changed = self.tree.with_untracked(|tree| match tree.find(pane) {
+            Some(PaneNode::Leaf {
+                active_activity, ..
+            }) => *active_activity != activity,
+            _ => false,
+        });
+        if !changed {
+            return;
+        }
         self.tree.update(|tree| {
             if let Some(PaneNode::Leaf {
                 active_activity, ..
             }) = tree.find_mut(pane)
             {
-                *active_activity = act_clone;
+                *active_activity = activity.clone();
             }
         });
         self.emit(PaneEvent::ActivityChanged {

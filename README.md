@@ -467,6 +467,44 @@ if let Some(tree) = mgr.switch_to(&WorkspaceId("other".into())) {
 }
 ```
 
+### Browser Back and Forward
+
+Under `MullionProvider`, create and provide one navigation controller:
+
+```rust
+let ctx = expect_context::<MullionContext<MyPaneData>>();
+let navigation = PaneNavigation::with_workspaces(ctx, manager.clone());
+provide_context(navigation.clone());
+
+view! {
+    <PaneBrowserHistory navigation=navigation.clone() namespace="my-app" />
+    <PaneLink<MyPaneData> pane=pane_id activity=ActivityId::new("files")>
+        "Files"
+    </PaneLink<MyPaneData>>
+}
+```
+
+Use `PaneNavigation::single(ctx)` without workspaces. Call
+`navigation.navigate(&pane_id, Some(activity))` for custom view controls and
+`navigation.switch_workspace(&workspace_id)` for custom workspace controls.
+The built-in activity rail and `WorkspaceSwitcher` use the provided controller.
+Keep your existing `TreeChanged` persistence handler. The controller saves the
+departing workspace and emits persistence events after selecting the destination.
+
+Mount one `PaneBrowserHistory` per browser window. The optional `on_diagnostic`
+callback receives `NavigationDiagnostic`; the default reports to the console.
+The bridge preserves the URL and unrelated object fields in `history.state`.
+Non-object state and incompatible ownership produce a diagnostic. Foreign
+entries remain outside pane navigation.
+
+Back and Forward restore changed activity selections in their original panes
+and workspaces. Current split geometry and pane data survive. Removed panes are
+never recreated, and a missing destination rejects replay. A later programmatic
+activity change survives replay when it conflicts with the historical value.
+Direct `ctx.set_active_activity` calls do not create history entries. On reload,
+the current persisted layout remains authoritative. The bridge adopts its saved
+history cursor and waits for Back or Forward before replaying changes.
+
 ### Activity rendering
 
 Activity components receive pane data via `ReadSignal<D>`:

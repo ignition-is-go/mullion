@@ -884,6 +884,8 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         };
 
         let can_drag = self.ctx.new_pane.is_some();
+        let nav_click = use_context::<crate::PaneNavigation<D>>();
+        let nav_key = nav_click.clone();
         let (ctx_click, ctx_ds, ctx_de, ctx_key) = (
             self.ctx.clone(),
             self.ctx.clone(),
@@ -932,11 +934,11 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
                  on:keydown=move |ev: web_sys::KeyboardEvent| {
                      if ev.key() == "Enter" || ev.key() == " " {
                          ev.prevent_default();
-                         ctx_key.set_active_activity(&pid_key, Some(act_key.clone()));
+                         crate::navigation::select_activity(&ctx_key, &nav_key, &pid_key, act_key.clone());
                      }
                  }
                  on:click=move |_| {
-                     ctx_click.set_active_activity(&pid_click, Some(act_click.clone()));
+                     crate::navigation::select_activity(&ctx_click, &nav_click, &pid_click, act_click.clone());
                  }>
                 <span class=ActivityBarStyle::ICON_SLOT>{icon_view}</span>
                 <span class=ActivityBarStyle::LABEL>{label}</span>

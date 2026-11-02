@@ -143,17 +143,10 @@ export function mullionHistoryWrite(owner, projection, push) {
         };
         let initial = navigation.projection(None);
         let projection = match read_projection(&owner) {
-            Ok(Some(saved)) => {
-                match navigation.restore(&initial, &saved) {
-                    Ok(diagnostics) => {
-                        for diagnostic in diagnostics {
-                            report(callback, diagnostic);
-                        }
-                    }
-                    Err(result) => report(callback, NavigationDiagnostic::ReplayRejected(result)),
-                }
-                saved
-            }
+            // Persisted application layout is authoritative on reload. Adopt
+            // the historical cursor without replaying selections on mount;
+            // subsequent traversal uses conditional differences as usual.
+            Ok(Some(saved)) => saved,
             Ok(None) => {
                 if let Err(error) = write_projection(&owner, &initial, false) {
                     report(callback, error);

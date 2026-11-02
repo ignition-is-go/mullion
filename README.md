@@ -501,7 +501,9 @@ Back and Forward restore changed activity selections in their original panes
 and workspaces. Current split geometry and pane data survive. Removed panes are
 never recreated, and a missing destination rejects replay. A later programmatic
 activity change survives replay when it conflicts with the historical value.
-Direct `ctx.set_active_activity` calls do not create history entries.
+Direct `ctx.set_active_activity` calls do not create history entries. On reload,
+the current persisted layout remains authoritative. The bridge adopts its saved
+history cursor and waits for Back or Forward before replaying changes.
 
 ### Activity rendering
 

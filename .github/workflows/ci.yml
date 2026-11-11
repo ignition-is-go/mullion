@@ -99,6 +99,12 @@ jobs:
           linux-dependencies: build
           cache-shared-key: mullion-release-v1
 
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+          gh --version
+
       - name: Install cargo-flux
         run: cargo install cargo-flux --version "$CARGO_FLUX_VERSION" --locked
 

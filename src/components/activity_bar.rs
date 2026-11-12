@@ -546,6 +546,10 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     /// Standalone navigation does not expose pane split and close commands.
     #[prop(default = true)]
     show_pane_actions: bool,
+    /// Host-controlled selection, for asynchronous confirmation before changing content.
+    /// The host commits the accepted selection through PaneNavigation.
+    #[prop(optional)]
+    on_select: Option<Callback<ActivityId>>,
 ) -> impl IntoView {
     let style = ctx.activity_bar_style.clone();
     let edge = ctx.activity_bar_edge;
@@ -603,6 +607,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         ctx: ctx.clone(),
         pane_id: pane_id.clone(),
         expanded,
+        on_select,
         active_opacity: style.icon_active_opacity.clone(),
         edge,
     };
@@ -613,6 +618,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         ctx: ctx.clone(),
         pane_id: pane_id.clone(),
         expanded,
+        on_select,
         active_opacity: style.icon_active_opacity.clone(),
         edge,
     };
@@ -844,6 +850,7 @@ struct BarRender<D: PaneData> {
     ctx: MullionContext<D>,
     pane_id: PaneId,
     expanded: RwSignal<HashSet<CategoryId>>,
+    on_select: Option<Callback<ActivityId>>,
     active_opacity: String,
     edge: ActivityBarEdge,
 }
@@ -908,6 +915,7 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
         let (act_click, act_drag, act_key) = (id.clone(), id.clone(), id.clone());
         let label = name.to_string();
         let aria_label = label.clone();
+        let on_select = self.on_select;
         let icon_view = render_icon(icon);
 
         // A `div role=button`, not a `<button>`: form controls consume mousedown
@@ -946,11 +954,11 @@ impl<D: PaneData + Send + Sync> BarRender<D> {
                  on:keydown=move |ev: web_sys::KeyboardEvent| {
                      if ev.key() == "Enter" || ev.key() == " " {
                          ev.prevent_default();
-                         crate::navigation::select_activity(&ctx_key, &nav_key, &pid_key, act_key.clone());
+                         if let Some(select) = on_select {select.run(act_key.clone());} else {crate::navigation::select_activity(&ctx_key, &nav_key, &pid_key, act_key.clone());}
                      }
                  }
                  on:click=move |_| {
-                     crate::navigation::select_activity(&ctx_click, &nav_click, &pid_click, act_click.clone());
+                     if let Some(select) = on_select {select.run(act_click.clone());} else {crate::navigation::select_activity(&ctx_click, &nav_click, &pid_click, act_click.clone());}
                  }>
                 <span class=ActivityBarStyle::ICON_SLOT>{icon_view}</span>
                 <span class=ActivityBarStyle::LABEL>{label}</span>

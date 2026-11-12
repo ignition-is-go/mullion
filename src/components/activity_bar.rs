@@ -146,7 +146,7 @@ fn activity_bar_expand_delay_style(delay_ms: u32) -> String {
     cat_border = "mullion-ab-cat-border",
     icon = "mullion-ab-icon"
 ))]
-#[component(modifier(collapsed, auto_hide, dragging))]
+#[component(modifier(collapsed, expanded, auto_hide, dragging))]
 #[component(internals(ActivityBarInternal))]
 #[component(base_css)]
 pub struct ActivityBarStyle {
@@ -207,6 +207,9 @@ impl css_styled::StyledComponentBase for ActivityBarStyle {
                 position: relative;
                 width: var(--ab-width);
             }
+            SCOPE.EXPANDED { width: var(--ab-expanded-width); }
+            SCOPE.EXPANDED PANEL { width: var(--ab-expanded-width); }
+            SCOPE.EXPANDED LABEL { opacity: 1; }
             PANEL {
                 position: absolute;
                 top: 0;
@@ -537,6 +540,12 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
     /// pinned/visible.
     #[prop(default = false)]
     auto_hide: bool,
+    /// Keep the existing labels visible at the configured expanded width.
+    #[prop(into, optional)]
+    labels_visible: Signal<bool>,
+    /// Standalone navigation does not expose pane split and close commands.
+    #[prop(default = true)]
+    show_pane_actions: bool,
 ) -> impl IntoView {
     let style = ctx.activity_bar_style.clone();
     let edge = ctx.activity_bar_edge;
@@ -638,6 +647,9 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
         if !hover_expand {
             mods.push(ActivityBarModifier::Collapsed);
         }
+        if labels_visible.get() {
+            mods.push(ActivityBarModifier::Expanded);
+        }
         if auto_hide {
             mods.push(ActivityBarModifier::AutoHide);
         }
@@ -710,7 +722,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                     // Host-provided per-pane chrome (session indicator, etc.),
                     // anchored above the split/close controls.
                     {pane_accessory.map(move |f| f(pid_accessory.clone()))}
-                    {
+                    {show_pane_actions.then(|| {
                         let ctx_sh = ctx_actions.clone();
                         let ctx_sv = ctx_actions.clone();
                         let ctx_cl = ctx_actions.clone();
@@ -739,7 +751,7 @@ pub fn ActivityBar<D: PaneData + Send + Sync>(
                                 <span class=ActivityBarStyle::LABEL>"Close"</span>
                             </button>
                         }
-                    }
+                    })}
                 </div>
             </div>
         </div>
